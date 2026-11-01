@@ -2,6 +2,8 @@
 
 自建 Headscale 控制平面、DERP/STUN 中继及 Headplane Web 管理界面，提供两种独立部署方式。
 
+**开始前先看：[部署前配置清单](CONFIGURATION.md)**，集中列出了所有必改字段及对应文件。
+
 ## 选择部署方式
 
 | 方式 | 适用环境 | HTTPS 443 | STUN UDP 3478 | 部署文档 |

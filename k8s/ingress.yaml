@@ -3,10 +3,13 @@ kind: Ingress
 metadata:
   name: headscale
 spec:
+  # 【必改】填写 kubectl get ingressclass 查到的现有控制器 class。
   ingressClassName: REPLACE_WITH_INGRESS_CLASS
+  # 【必改】tls.hosts 和 rules.host 都替换为实际控制域名。
   tls:
     - hosts:
         - vpn.example.com
+      # 【必备】同 namespace 内须有此 TLS Secret；改名时同步创建命令。
       secretName: headscale-tls
   rules:
     - host: vpn.example.com

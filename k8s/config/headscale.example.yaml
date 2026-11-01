@@ -1,11 +1,16 @@
+# 配置清单见 ../../CONFIGURATION.md；复制为 headscale.yaml 后修改。
+# 【必改】客户端使用的公网 HTTPS 地址，与 Nginx / Ingress 域名一致。
 server_url: "https://vpn.example.com"
+# 【通常不用改】容器内部 HTTP 监听，TLS 由 Nginx / Ingress 处理。
 listen_addr: "0.0.0.0:8080"
 metrics_listen_addr: ""
 grpc_listen_addr: "127.0.0.1:50443"
 grpc_allow_insecure: false
+# 【按需】仅填写实际反向代理来源的精确 CIDR；未知时保持空，不信任来源头。
 trusted_proxies: []
 noise:
   private_key_path: /var/lib/headscale/noise_private.key
+# 【通常不用改】节点地址必须在 Tailscale 支持的 CGNAT / ULA 范围内。
 prefixes:
   v4: 100.64.0.0/10
   v6: fd7a:115c:a1e0::/48
@@ -15,6 +20,7 @@ database:
   sqlite:
     path: /var/lib/headscale/db.sqlite
     write_ahead_log: true
+# 【通常不用改】反向代理终止 HTTPS，Headscale 不再申请证书。
 tls_letsencrypt_hostname: ""
 tls_cert_path: ""
 tls_key_path: ""
@@ -24,19 +30,26 @@ derp:
     region_id: 999
     region_code: us-idc
     region_name: "US IDC DERP"
+    # 【安全默认】仅允许本控制平面已注册节点使用中继。
     verify_clients: true
     stun_listen_addr: "0.0.0.0:3478"
     private_key_path: /var/lib/headscale/derp_server_private.key
     automatically_add_embedded_derp_region: true
+    # 【必改】IDC 真实公网 IPv4，不能保留示例值。
+    # K8s 模板要求 Ingress 公网入口与 STUN 节点使用同一公网 IP。
     ipv4: "203.0.113.10"
+    # 【按需】仅在真实可达时添加 ipv6，不填写虚构地址。
+  # 【按需】空列表表示仅使用自建中继，无其他中继兜底。
   urls: []
   paths: []
   auto_update_enabled: false
+# 【业务启用前必改】编辑同目录 policy.hujson，按节点/用户/端口放行；默认全部拒绝。
 policy:
   mode: file
   path: /etc/headscale/policy.hujson
 dns:
   magic_dns: true
+  # 【必改】MagicDNS 基域，与上面的 server_url 域名不同。
   base_domain: tail.example.com
   override_local_dns: false
   nameservers:

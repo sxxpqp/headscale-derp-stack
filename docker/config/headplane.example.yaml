@@ -1,13 +1,20 @@
+# 配置清单见 ../../CONFIGURATION.md；复制为 headplane.yaml 后修改。
 server:
   host: "0.0.0.0"
   port: 3000
+  # 【必改】管理界面公网基础地址，不包含 /admin。
   base_url: "https://vpn.example.com"
+  # 【必改】用 openssl rand -hex 16 生成随机 32 字符值，勿提交真实密钥。
   cookie_secret: "REPLACE_WITH_32_CHAR_RANDOM_VALUE"
+  # 【通常不用改】公网 HTTPS 保持 true。
   cookie_secure: true
   data_path: /var/lib/headplane
 headscale:
+  # 【通常不用改】Docker / K8s 内部服务地址，不是浏览器访问地址。
   url: "http://headscale:8080"
+  # 【必改】客户端访问的公网 Headscale 地址，与 server_url 一致。
   public_url: "https://vpn.example.com"
+# 【通常不用改】基础 API 管理模式，不提供容器或集群控制权限。
 integration:
   agent:
     enabled: false

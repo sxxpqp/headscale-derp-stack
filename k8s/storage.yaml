@@ -1,3 +1,5 @@
+# 【必备】需要默认 StorageClass；否则在每个 PVC spec 中添加 storageClassName。
+# 【按需】两个 PVC 默认各 1Gi；按容量调整 storage。
 {
   "apiVersion": "v1",
   "kind": "PersistentVolumeClaim",

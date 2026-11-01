@@ -1,5 +1,7 @@
 # Kubernetes 部署
 
+**先看 [部署前配置清单](../CONFIGURATION.md)**，配置文件中也已标明必改项。
+
 从仓库根目录执行 `cd k8s`，下面命令均在本目录执行。使用已有集群、Ingress Controller 和 StorageClass，不安装或升级这些组件。
 
 ## 1. 网络与存储前提

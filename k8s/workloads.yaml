@@ -1,3 +1,5 @@
+# 【必改】REPLACE_WITH_IDC_NODE 替换为实际节点 hostname。
+# 【按需】资源 requests/limits 按容量调整。单副本 SQLite 不可直接扩容副本。
 {
   "apiVersion": "apps/v1",
   "kind": "Deployment",

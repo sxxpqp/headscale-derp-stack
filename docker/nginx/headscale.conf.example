@@ -1,3 +1,6 @@
+# 【必改】所有 vpn.example.com 替换为实际控制域名。
+# 【必改】ssl_certificate / ssl_certificate_key 改为已有有效证书路径。
+# 【通常不用改】宿主机 Nginx 使用 127.0.0.1 上游；容器 Nginx 见 README。
 # Include inside the existing nginx http {} block.
 map $http_upgrade $headscale_connection {
     default upgrade;

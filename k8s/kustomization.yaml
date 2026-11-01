@@ -1,3 +1,4 @@
+# 【按需】images.newTag 指定目标版本；升级先核对配套配置并备份。
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: headscale
