@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: headscale
+spec:
+  ingressClassName: REPLACE_WITH_INGRESS_CLASS
+  tls:
+    - hosts:
+        - vpn.example.com
+      secretName: headscale-tls
+  rules:
+    - host: vpn.example.com
+      http:
+        paths:
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: headplane
+                port:
+                  number: 3000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: headscale
+                port:
+                  number: 8080

@@ -1,73 +1,49 @@
 # headscale-derp-stack
 
-美国 IDC 自建 Headscale 控制平面、内置 DERP/STUN 和 Headplane 管理界面。Docker Compose 部署，复用宿主机已有 Nginx 的 HTTPS 443。
+自建 Headscale 控制平面、DERP/STUN 中继及 Headplane Web 管理界面，提供两种独立部署方式。
 
-## 版本与范围
+## 选择部署方式
 
-固定默认版本：Headscale 0.29.7、Headplane 0.8.2。可在 `.env` 显式修改版本；升级前核对对应版本配置、兼容性并备份。不安装 Docker，不自动升级。未提供 Kubernetes 清单。
+| 方式 | 适用环境 | HTTPS 443 | STUN UDP 3478 | 部署文档 |
+| --- | --- | --- | --- | --- |
+| Docker Compose | 单台 IDC 服务器 | 复用宿主机 Nginx | Docker 端口映射 | [Docker 部署](docker/README.md) |
+| Kubernetes | 已有 K8s 集群 | 复用已有 Ingress Controller | 固定 IDC 节点 hostPort | [K8s 部署](k8s/README.md) |
 
-这是一套部署模板，尚未在目标 IDC 验证。需要 Linux、Docker Compose、域名及有效证书。域名 A 记录指向 IDC 公网地址，不开启 Cloudflare HTTP 代理。仅配置真实可达的 AAAA 记录。
+## 目录
 
-## 准备
-
-```sh
-cp .env.example .env
-cp config/headscale.example.yaml config/headscale.yaml
-cp config/headplane.example.yaml config/headplane.yaml
-openssl rand -hex 16
+```text
+docker/                 # Compose 部署，自包含配置示例
+  compose.yaml
+  .env.example          # 显式目标版本
+  config/
+  nginx/
+  README.md
+k8s/                    # Kustomize 部署，自包含配置示例
+  kustomization.yaml    # 显式镜像版本
+  config/               # Headscale ConfigMap / Headplane Secret 来源
+  namespace.yaml
+  storage.yaml          # 两个持久卷申请
+  workloads.yaml
+  services.yaml
+  ingress.yaml
+  README.md
 ```
 
-将生成的 32 字符随机值填入 `cookie_secret`。修改两份配置及 Nginx 示例的域名；将 `203.0.113.10` 改为真实公网 IPv4。MagicDNS 的 `base_domain` 必须不同于控制域名。实际配置和 `.env` 已被 Git 忽略，不提交 API Key、证书或数据库。
+## 默认行为
 
-## 启动
+- 固定 Headscale **0.29.7**、Headplane **0.8.2**，不使用 latest；切换版本前核对配置和兼容性并备份。
+- DERP 只允许已注册节点使用；仅发布自建中继，无其他中继兜底。
+- ACL 默认拒绝节点间业务连接，需按实际需求添加最小权限规则。
+- 管理界面使用 Headscale API Key 登录，不提供 Docker socket 或集群控制权限。
+- 示例域名及公网 IP 必须替换；真实配置、会话密钥和证书不提交 Git。
 
-```sh
-docker compose config --images
-docker compose run --rm headscale configtest
-docker compose up -d
-docker compose exec headscale version
-docker compose logs --tail=100 headscale headplane
-```
+## 验收范围
 
-启动日志应展示实际版本；与 `.env` 目标版本核对。配置未准备好前不要启动，避免文件挂载源被创建成目录。
-
-## Nginx 与端口
-
-参考 `nginx/headscale.conf.example` 合并到现有 Nginx；替换域名及真实证书路径。示例假设 Nginx 在宿主机，并由既有证书流程负责签发和续期。先执行 `sudo nginx -t`，成功后执行 `sudo systemctl reload nginx`。不要覆盖现有业务配置。
-
-443/TCP 代理控制协议和 DERP；3478/UDP 必须在防火墙及安全组直接放行，不能通过普通 HTTP Ingress。80/TCP 用于跳转及现有证书流程。8080/3000 仅绑定宿主机回环地址。Nginx 必须保留自定义 Upgrade 请求头，不能在整个控制域名前添加 Basic Auth。
-
-Nginx 若在容器中，加入相同网络后使用 `headscale:8080` 和 `headplane:3000`，不要使用容器自身的 127.0.0.1。`trusted_proxies` 默认留空，不信任外部传入 IP 头；确认实际代理来源地址后按精确 CIDR 设置。
-
-## 管理界面和注册
-
-```sh
-docker compose exec headscale users create admin
-docker compose exec headscale apikeys create
-```
-
-访问 `https://你的域名/admin`，使用 API Key 登录。默认仅启用 API 管理，不挂载 Docker socket，不允许界面修改 Headscale 文件配置。需要 SSO 时另行配置 OIDC 和服务端 API Key。
-
-客户端执行 `tailscale up --login-server=https://你的域名`，按显示的注册链接操作。默认 `config/policy.hujson` 拒绝节点间所有业务连接；通信前根据实际用户、节点及端口添加最小放行规则，不要误认为注册成功即已放通。
-
-## 验证
-
-```sh
-curl -v https://你的域名/health
-tailscale netcheck
-tailscale debug derp-map
-tailscale debug derp us-idc
-```
-
-客户端命令应在已注册节点上执行。需两台节点和对应 ACL，在无法直连时用 `tailscale ping 对端IP` 确认使用 us-idc 中继。HTTP 健康检查不能证明 UDP 或实际中继可用。只发布自建 DERP，服务器故障时没有其他中继兜底。
-
-## 数据与备份
-
-数据库、Noise/DERP 密钥分别保存在 `headscale-data`，管理界面状态保存在 `headplane-data` 命名卷。维护窗口停止服务后备份两个卷及本地实际配置，备份完成再启动；恢复操作先在隔离环境验证。`docker compose down` 保留卷，勿使用 `down -v`，它会删除数据。
+两种方式均需验证 HTTPS、管理登录、节点注册、UDP STUN 及双节点实际中继通信。当前提供部署模板；本地静态检查不代表已在 IDC 或集群部署成功。各方式的前提、启动步骤、版本检查和备份说明见对应文档。
 
 ## 官方参考
 
-- https://github.com/juanfont/headscale/blob/v0.29.7/config-example.yaml
-- https://headscale.net/stable/ref/derp/
-- https://headscale.net/stable/ref/integration/reverse-proxy/
-- https://github.com/tale/headplane/blob/v0.8.2/config.example.yaml
+- [Headscale 固定版本配置](https://github.com/juanfont/headscale/blob/v0.29.7/config-example.yaml)
+- [DERP](https://headscale.net/stable/ref/derp/)
+- [反向代理协议要求](https://headscale.net/stable/ref/integration/reverse-proxy/)
+- [Headplane 配置](https://github.com/tale/headplane/blob/v0.8.2/config.example.yaml)

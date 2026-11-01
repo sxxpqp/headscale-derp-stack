@@ -1,0 +1,183 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "headscale"
+  },
+  "spec": {
+    "replicas": 1,
+    "strategy": {
+      "type": "Recreate"
+    },
+    "selector": {
+      "matchLabels": {
+        "app": "headscale"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "headscale"
+        }
+      },
+      "spec": {
+        "automountServiceAccountToken": false,
+        "containers": [
+          {
+            "name": "headscale",
+            "image": "headscale/headscale:0.29.7",
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 8080
+              },
+              {
+                "name": "stun",
+                "containerPort": 3478,
+                "hostPort": 3478,
+                "protocol": "UDP"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "memory": "512Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "config",
+                "mountPath": "/etc/headscale",
+                "readOnly": true
+              },
+              {
+                "name": "data",
+                "mountPath": "/var/lib/headscale"
+              },
+              {
+                "name": "run",
+                "mountPath": "/var/run/headscale"
+              }
+            ],
+            "readinessProbe": {
+              "tcpSocket": {
+                "port": "http"
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 10
+            },
+            "args": [
+              "serve"
+            ]
+          }
+        ],
+        "volumes": [
+          {
+            "name": "config",
+            "configMap": {
+              "name": "headscale-config"
+            }
+          },
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "headscale-data"
+            }
+          },
+          {
+            "name": "run",
+            "emptyDir": {}
+          }
+        ],
+        "nodeSelector": {
+          "kubernetes.io/hostname": "REPLACE_WITH_IDC_NODE"
+        }
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "headplane"
+  },
+  "spec": {
+    "replicas": 1,
+    "strategy": {
+      "type": "Recreate"
+    },
+    "selector": {
+      "matchLabels": {
+        "app": "headplane"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "headplane"
+        }
+      },
+      "spec": {
+        "automountServiceAccountToken": false,
+        "containers": [
+          {
+            "name": "headplane",
+            "image": "ghcr.io/tale/headplane:0.8.2",
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 3000
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "memory": "512Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "config",
+                "mountPath": "/etc/headplane",
+                "readOnly": true
+              },
+              {
+                "name": "data",
+                "mountPath": "/var/lib/headplane"
+              }
+            ],
+            "readinessProbe": {
+              "tcpSocket": {
+                "port": "http"
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 10
+            }
+          }
+        ],
+        "volumes": [
+          {
+            "name": "config",
+            "secret": {
+              "secretName": "headplane-config"
+            }
+          },
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "headplane-data"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

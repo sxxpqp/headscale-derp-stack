@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: headscale
+resources:
+  - namespace.yaml
+  - storage.yaml
+  - workloads.yaml
+  - services.yaml
+  - ingress.yaml
+configMapGenerator:
+  - name: headscale-config
+    files:
+      - config.yaml=config/headscale.yaml
+      - policy.hujson=config/policy.hujson
+secretGenerator:
+  - name: headplane-config
+    files:
+      - config.yaml=config/headplane.yaml
+images:
+  - name: headscale/headscale
+    newTag: 0.29.7
+  - name: ghcr.io/tale/headplane
+    newTag: 0.8.2

@@ -1,6 +1,6 @@
-.env
-config/headscale.yaml
-config/headplane.yaml
+**/.env
+**/config/headscale.yaml
+**/config/headplane.yaml
 *.key
 *.pem
 *.sqlite*

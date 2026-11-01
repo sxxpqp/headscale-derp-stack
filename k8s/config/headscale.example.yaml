@@ -1,0 +1,48 @@
+server_url: "https://vpn.example.com"
+listen_addr: "0.0.0.0:8080"
+metrics_listen_addr: ""
+grpc_listen_addr: "127.0.0.1:50443"
+grpc_allow_insecure: false
+trusted_proxies: []
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+tls_letsencrypt_hostname: ""
+tls_cert_path: ""
+tls_key_path: ""
+derp:
+  server:
+    enabled: true
+    region_id: 999
+    region_code: us-idc
+    region_name: "US IDC DERP"
+    verify_clients: true
+    stun_listen_addr: "0.0.0.0:3478"
+    private_key_path: /var/lib/headscale/derp_server_private.key
+    automatically_add_embedded_derp_region: true
+    ipv4: "203.0.113.10"
+  urls: []
+  paths: []
+  auto_update_enabled: false
+policy:
+  mode: file
+  path: /etc/headscale/policy.hujson
+dns:
+  magic_dns: true
+  base_domain: tail.example.com
+  override_local_dns: false
+  nameservers:
+    global: []
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
+log:
+  level: info
+  format: text
