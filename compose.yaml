@@ -1,0 +1,26 @@
+name: headscale-derp-stack
+services:
+  headscale:
+    image: headscale/headscale:${HEADSCALE_VERSION:-0.29.7}
+    restart: unless-stopped
+    command: serve
+    ports:
+      - "127.0.0.1:8080:8080/tcp"
+      - "3478:3478/udp"
+    volumes:
+      - ./config/headscale.yaml:/etc/headscale/config.yaml:ro
+      - ./config/policy.hujson:/etc/headscale/policy.hujson:ro
+      - headscale-data:/var/lib/headscale
+    tmpfs:
+      - /var/run/headscale
+  headplane:
+    image: ghcr.io/tale/headplane:${HEADPLANE_VERSION:-0.8.2}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./config/headplane.yaml:/etc/headplane/config.yaml:ro
+      - headplane-data:/var/lib/headplane
+volumes:
+  headscale-data:
+  headplane-data:

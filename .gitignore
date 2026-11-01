@@ -1,0 +1,7 @@
+.env
+config/headscale.yaml
+config/headplane.yaml
+*.key
+*.pem
+*.sqlite*
+.DS_Store
