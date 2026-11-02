@@ -18,8 +18,18 @@
 ```sh
 cp config/headscale.example.yaml config/headscale.yaml
 cp config/headplane.example.yaml config/headplane.yaml
+mkdir -p config
+cat > config/policy.hujson <<'EOF'
+{
+  "acls": [
+    { "action": "accept", "src": ["*"], "dst": ["*:*"] }
+  ]
+}
+EOF
 openssl rand -hex 16
 ```
+
+仓库已提供同名策略文件；上述创建命令会覆盖它，自定义过 ACL 时请保留原文件。
 
 将随机 32 字符值填入 Headplane `cookie_secret`。替换两份配置与 `ingress.yaml` 的域名及 Headscale 公网 IP；MagicDNS 基域必须与服务域名不同。Headplane 内部通过 `http://headscale:8080` 连接。
 
@@ -67,7 +77,7 @@ kubectl -n headscale exec deployment/headscale -- headscale apikeys create
 curl -v https://你的域名/health
 ```
 
-使用 API Key 登录 `https://你的域名/admin`。客户端执行 `tailscale up --login-server=https://你的域名`，按输出注册链接注册。默认 `config/policy.hujson` 拒绝节点间业务连接，先按用户及端口配置 ACL，再验证：
+使用 API Key 登录 `https://你的域名/admin`。客户端执行 `tailscale up --login-server=https://你的域名`，按输出注册链接注册。默认 `config/policy.hujson` 允许所有已注册节点相互访问所有端口；需要隔离时先收紧 ACL，再验证：
 
 ```sh
 tailscale netcheck

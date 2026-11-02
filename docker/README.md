@@ -16,8 +16,18 @@
 cp .env.example .env
 cp config/headscale.example.yaml config/headscale.yaml
 cp config/headplane.example.yaml config/headplane.yaml
+mkdir -p config
+cat > config/policy.hujson <<'EOF'
+{
+  "acls": [
+    { "action": "accept", "src": ["*"], "dst": ["*:*"] }
+  ]
+}
+EOF
 openssl rand -hex 16
 ```
+
+仓库已提供同名策略文件；上述创建命令会覆盖它，自定义过 ACL 时请保留原文件。Compose 已将该文件只读挂载到 `/etc/headscale/policy.hujson`。
 
 将生成的 32 字符随机值填入 `cookie_secret`。修改两份配置及 Nginx 示例的域名；将 `203.0.113.10` 改为真实公网 IPv4。MagicDNS 的 `base_domain` 必须不同于控制域名。实际配置和 `.env` 已被 Git 忽略，不提交 API Key、证书或数据库。
 
@@ -50,7 +60,7 @@ docker compose exec headscale apikeys create
 
 访问 `https://你的域名/admin`，使用 API Key 登录。默认仅启用 API 管理，不挂载 Docker socket，不允许界面修改 Headscale 文件配置。需要 SSO 时另行配置 OIDC 和服务端 API Key。
 
-客户端执行 `tailscale up --login-server=https://你的域名`，按显示的注册链接操作。默认 `config/policy.hujson` 拒绝节点间所有业务连接；通信前根据实际用户、节点及端口添加最小放行规则，不要误认为注册成功即已放通。
+客户端执行 `tailscale up --login-server=https://你的域名`，按显示的注册链接操作。默认 `config/policy.hujson` 允许所有已注册节点相互访问所有端口；需要隔离时按实际用户、节点及端口收紧。
 
 ## 验证
 

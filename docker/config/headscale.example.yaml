@@ -1,61 +1,126 @@
-# 配置清单见 ../../CONFIGURATION.md；复制为 headscale.yaml 后修改。
-# 【必改】客户端使用的公网 HTTPS 地址，与 Nginx / Ingress 域名一致。
-server_url: "https://vpn.example.com"
-# 【通常不用改】容器内部 HTTP 监听，TLS 由 Nginx / Ingress 处理。
-listen_addr: "0.0.0.0:8080"
-metrics_listen_addr: ""
-grpc_listen_addr: "127.0.0.1:50443"
+# 适用于 Headscale 0.29.7；复制为 headscale.yaml 后修改。
+# 部署前清单见 ../../CONFIGURATION.md。
+---
+# ✏️ 必须改：客户端实际访问的 HTTPS 地址，与 Nginx / Ingress 的域名一致。
+server_url: https://vpn.example.com
+# ✅ 不用改：容器内必须监听所有地址，供反向代理及 Headplane 访问。
+listen_addr: 0.0.0.0:8080
+# ✅ 不用改：仅监听容器本机，不发布到公网。
+metrics_listen_addr: 127.0.0.1:9090
+grpc_listen_addr: 127.0.0.1:50443
 grpc_allow_insecure: false
-# 【按需】仅填写实际反向代理来源的精确 CIDR；未知时保持空，不信任来源头。
+# ⚙️ 按需改：只填写已确认的代理来源 CIDR；未知时留空。
 trusted_proxies: []
+
 noise:
+  # ✅ 不用改：首次启动自动生成；由持久卷保存，务必备份。
   private_key_path: /var/lib/headscale/noise_private.key
-# 【通常不用改】节点地址必须在 Tailscale 支持的 CGNAT / ULA 范围内。
+
 prefixes:
+  # ⚙️ 按需改：默认即可；只能使用以下范围的子网，注册节点后不要更改。
   v4: 100.64.0.0/10
   v6: fd7a:115c:a1e0::/48
   allocation: sequential
-database:
-  type: sqlite
-  sqlite:
-    path: /var/lib/headscale/db.sqlite
-    write_ahead_log: true
-# 【通常不用改】反向代理终止 HTTPS，Headscale 不再申请证书。
-tls_letsencrypt_hostname: ""
-tls_cert_path: ""
-tls_key_path: ""
+
 derp:
   server:
+    # ✅ 不用改：本项目启用内置中继，要求 server_url 使用 HTTPS。
     enabled: true
     region_id: 999
+    # ⚙️ 按需改：显示名称；修改 code 后同步验收命令。
     region_code: us-idc
     region_name: "US IDC DERP"
-    # 【安全默认】仅允许本控制平面已注册节点使用中继。
+    # ✅ 不用改：仅允许本控制平面的已注册客户端使用中继。
     verify_clients: true
+    # ✅ 不用改：需放行 UDP 3478。
     stun_listen_addr: "0.0.0.0:3478"
     private_key_path: /var/lib/headscale/derp_server_private.key
     automatically_add_embedded_derp_region: true
-    # 【必改】IDC 真实公网 IPv4，不能保留示例值。
-    # K8s 模板要求 Ingress 公网入口与 STUN 节点使用同一公网 IP。
-    ipv4: "203.0.113.10"
-    # 【按需】仅在真实可达时添加 ipv6，不填写虚构地址。
-  # 【按需】空列表表示仅使用自建中继，无其他中继兜底。
+    # ✏️ 必须改：真实公网 IPv4，含弹性 IP / NAT 场景，不能保留示例值。
+    # K8s 模板要求 Ingress 入口与 STUN 节点共用公网 IPv4。
+    ipv4: 203.0.113.10
+    # ⚙️ 按需改：只有真实可达的 IPv6 才添加；无 IPv6 时保持注释。
+    # ipv6: 2001:db8::1
+  # ⚙️ 按需改：空列表只使用自建中继；保留官方备用时添加官方 DERP map URL。
   urls: []
   paths: []
-  auto_update_enabled: false
-# 【业务启用前必改】编辑同目录 policy.hujson，按节点/用户/端口放行；默认全部拒绝。
+  auto_update_enabled: true
+  update_frequency: 3h
+
+# ⚙️ 按需改：内网可设 true，禁用启动时版本检查。
+disable_check_updates: false
+# ✅ 不用改：0.29.7 使用此结构，仅清理临时节点。
+node:
+  ephemeral:
+    inactivity_timeout: 30m
+
+database:
+  # ✅ 不用改：本项目使用单副本 SQLite，数据库路径对应持久卷。
+  type: sqlite
+  debug: false
+  gorm:
+    prepare_stmt: true
+    parameterized_queries: true
+    skip_err_record_not_found: true
+    slow_threshold: 1000
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+    wal_autocheckpoint: 1000
+
+# ✅ 不用改：HTTPS 由现有 Nginx / Ingress 终止，Headscale 不申请证书。
+acme_url: https://acme-v02.api.letsencrypt.org/directory
+acme_email: ""
+tls_letsencrypt_hostname: ""
+tls_letsencrypt_cache_dir: /var/lib/headscale/cache
+tls_letsencrypt_challenge_type: HTTP-01
+tls_letsencrypt_listen: ":http"
+tls_cert_path: ""
+tls_key_path: ""
+
+log:
+  format: text
+  # ⚙️ 按需改：排错临时用 debug，平时 info。
+  level: info
+
 policy:
+  # ✅ 不用改：部署前创建同目录 policy.hujson，路径为容器内路径。
+  # 随仓库提供的策略允许所有已注册节点访问所有端口，可按需收紧。
   mode: file
   path: /etc/headscale/policy.hujson
+
 dns:
   magic_dns: true
-  # 【必改】MagicDNS 基域，与上面的 server_url 域名不同。
-  base_domain: tail.example.com
-  override_local_dns: false
+  # ✏️ 必须核对：MagicDNS 基域，不能与控制域名相同；不要用 .local。
+  base_domain: ts.corp.internal
+  # ✅ 不用改：客户端接受 Headscale 下发的 DNS 时使用以下解析器。
+  override_local_dns: true
   nameservers:
-    global: []
+    # ⚙️ 按需改：使用客户端所在网络可达的 DNS。
+    global:
+      - 223.5.5.5
+      - 114.114.114.114
+    # ⚙️ 按需改：有内部 DNS 时添加真实域名/地址，并确保路由和 ACL 放行 53 端口。
+    split: {}
+    # split:
+    #   corp.internal:
+    #     - 192.168.10.2
+    #   idc.internal:
+    #     - 10.0.0.2
+  search_domains: []
+  extra_records: []
+  # extra_records_path: /var/lib/headscale/extra-records.json
+
+# ✅ 不用改：容器内 CLI 通过此 socket 与服务通信。
 unix_socket: /var/run/headscale/headscale.sock
 unix_socket_permission: "0770"
-log:
-  level: info
-  format: text
+
+# ⚙️ 按需改：不用 OIDC 时保持注释；启用时参考对应版本官方完整配置。
+# oidc:
+#   issuer: https://your-oidc.example.com
+#   client_id: your-client-id
+#   client_secret_path: /run/secrets/oidc_client_secret
+
+# ✅ 不用改：不要求客户端向 Tailscale 日志服务上报。
+logtail:
+  enabled: false

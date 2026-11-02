@@ -1,6 +1,6 @@
 # 部署前配置清单
 
-先选 [Docker](docker/README.md) 或 [K8s](k8s/README.md)，不要同时部署两套。配置内以 **【必改】/【按需】/【通常不用改】** 标记。示例配置不会自动替换变量；需要复制后编辑实际文件。
+先选 [Docker](docker/README.md) 或 [K8s](k8s/README.md)，不要同时部署两套。配置内以 **✏️ 必须改 / ⚙️ 按需改 / ✅ 不用改** 或 **【必改】/【按需】/【通常不用改】** 标记。示例配置不会自动替换变量；需要复制后编辑实际文件。
 
 ## 两种方式共用的必改项
 
@@ -14,7 +14,7 @@
 | `<方式>/config/headplane.yaml` | `server.base_url` | 公网管理基础地址；本模板与控制地址相同，不带 `/admin` |
 | 同上 | `server.cookie_secret` | `openssl rand -hex 16` 生成的随机 32 字符密钥 |
 | 同上 | `headscale.public_url` | 与 Headscale `server_url` 一致 |
-| `<方式>/config/policy.hujson` | `acls` | 业务通信前必须按实际用户、节点和端口添加规则；空列表拒绝全部 |
+| `<方式>/config/policy.hujson` | `acls` | 默认全部放行；需要隔离时按实际用户、节点和端口收紧 |
 
 先复制：在所选方式目录执行 `cp config/headscale.example.yaml config/headscale.yaml` 和 `cp config/headplane.example.yaml config/headplane.yaml`。两份实际配置都已被 Git 忽略。API Key 在服务启动后生成，不填进示例文件。
 
@@ -41,11 +41,15 @@
 
 ## 通常不用改
 
+模板默认开启 MagicDNS，基域为 `ts.corp.internal`，并通过 `override_local_dns: true` 下发 `223.5.5.5` 和 `114.114.114.114`。客户端需接受 DNS 配置；解析器应按客户端网络可达性调整。Split DNS 默认留空，有内部 DNS 时再填真实地址，并确保路由及 ACL 放行 DNS 端口。
+
+Headscale 0.29.7 的临时节点超时字段为 `node.ephemeral.inactivity_timeout`，不使用旧顶层字段 `ephemeral_node_inactivity_timeout`。模板不添加该版本官方配置未列出的 `randomize_client_port`；节点 UDP 端口以客户端实际配置为准。
+
 内部 HTTP 地址、持久化路径、Noise/DERP 密钥路径、`cookie_secure: true`、`verify_clients: true` 保持默认。`trusted_proxies` 未知时留空，确认实际代理来源 CIDR 后再配置。仅在 IPv6 真实可达时添加 `derp.server.ipv6`。
 
 ## 改完后检查
 
-1. 搜索实际配置和入口文件，确认没有残留 `vpn.example.com`、`tail.example.com`、`203.0.113.10`、`REPLACE_WITH`。模板文件内保留占位值是正常的。
+1. 搜索实际配置和入口文件，确认没有残留 `vpn.example.com`、`ts.corp.internal`、`203.0.113.10`、`REPLACE_WITH`。模板文件内保留占位值是正常的。
 2. Docker 执行 Compose 检查及 Headscale configtest；K8s 执行 Kustomize 渲染和服务端 dry-run，命令见各部署文档。
 3. 在目标环境验证 HTTPS、管理登录、节点注册、STUN 及两节点实际中继；静态检查不能替代这些步骤。
 
