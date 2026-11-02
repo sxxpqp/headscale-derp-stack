@@ -22,5 +22,7 @@ integration:
     enabled: false
   kubernetes:
     enabled: false
+    # 0.8.2 的配置校验要求填写，即使 Kubernetes 集成关闭。
+    pod_name: "headscale"
   proc:
     enabled: false
