@@ -4,7 +4,7 @@
 
 ## 使用
 
-Linux 上需要 Bash 4+、GNU sed、grep、cp 等常用工具；服务端 COOKIE_SECRET 留空时需要 openssl。只有同时填写 TLS_CERT 和 TLS_KEY 时，生成阶段需要 kubectl（仅本地 create secret --dry-run=client，不连接集群）。部署阶段再使用现有 Docker Compose 或 kubectl。
+Linux 上需要 Bash 4+、GNU sed/mv、awk、mktemp、grep、cp 等常用工具；服务端 COOKIE_SECRET 留空时需要 openssl。服务端 K8s 生成阶段需要 kubectl 进行本地资源修改；同时填写 TLS_CERT 和 TLS_KEY 时还会执行本地 create secret --dry-run=client，均不连接集群。部署阶段再使用现有 Docker Compose 或 kubectl。
 
 脚本与变量模板都在对应部署目录中：
 
@@ -107,9 +107,9 @@ K8s 的预认证密钥写入 config/authkey，kustomization.yaml 自动生成并
   client-docker/site-a/
 ```
 
-各部署目录的 setup.env、setup.*.env 和根目录 .generated/ 已加入 .gitignore。生成文件含真实密钥，使用受控管理机保存；普通 Unix 环境下新文件默认600、目录700。同名输出目录存在时退出，不自动覆盖。失败时也可能留下部分生成文件，检查后使用新的 INSTANCE 重试。
+各部署目录的 setup.env、setup.*.env 和根目录 .generated/ 已加入 .gitignore。生成文件含真实密钥，使用受控管理机保存；普通 Unix 环境下新文件默认600、目录700。同名输出目录存在时退出，不自动覆盖。生成先写入独立临时目录，全部成功后才发布到最终目录；失败时自动清理本次临时文件，可以用相同 INSTANCE 重试。以前版本已经遗留的半成品目录不会自动删除，请先备份/重命名，或改用新的 INSTANCE。
 
-脚本不会读取原部署中未跟踪的配置文件或私钥，仅从仓库模板生成。源 manifest 如果已被手工修改，缺少预期替换字段时会报错；可在干净仓库副本中运行，再合并自定义 ACL、DNS 或其他修改。默认复制仓库的全放行 ACL，不会自动继承旧部署自定义策略。
+脚本不会读取原部署中未跟踪的配置文件或私钥，仅从仓库模板生成。Headscale / Headplane 配置按缩进式 YAML 的标量字段路径更新，不再依赖旧域名或 cookie_secret 占位值；已经改过这些字段值也可生成。字段被删除、重复或改成复杂 YAML 结构时会明确报错，并清理本次临时结果。Ingress 使用 kubectl patch --local 更新；其他自定义结构仍需在生成后核对。默认复制仓库的全放行 ACL，不会自动继承旧部署自定义策略。
 
 生成后先检查文件，再在生成目录执行脚本列出的命令。服务端 K8s 示例：
 ```sh

@@ -137,7 +137,32 @@ sed -i "s|^TLS_KEY=.*|TLS_KEY=$TEST_ROOT/tls.key|" "$TEST_ROOT/tls.env"
 run tls
 rendered="$(kubectl kustomize ".generated/server-k8s/$RUN-tls")"
 grep -q 'type: kubernetes.io/tls' <<< "$rendered"
-printf 'Generation, TLS import, secret masking, input validation and overwrite checks passed.\n'
+# 在隔离的模板副本中验证：改过示例值仍可生成；失败不占用最终目录。
+FIXTURE="$TEST_ROOT/fixture"
+mkdir -p "$FIXTURE/lib" "$FIXTURE/server/k8s/config"
+cp lib/configure-common.sh "$FIXTURE/lib/"
+for file in configure.sh namespace.yaml storage.yaml services.yaml workloads.yaml ingress.yaml kustomization.yaml; do
+  cp "server/k8s/$file" "$FIXTURE/server/k8s/$file"
+done
+for file in headscale.example.yaml headplane.example.yaml policy.hujson; do
+  cp "server/k8s/config/$file" "$FIXTURE/server/k8s/config/$file"
+done
+sed -i 's/vpn\.example\.com/already.edited.example/g; s/REPLACE_WITH_32_CHAR_RANDOM_VALUE/fedcba9876543210fedcba9876543210/g' "$FIXTURE/server/k8s/config/headplane.example.yaml"
+settings edited server k8s
+bash "$FIXTURE/server/k8s/configure.sh" "$TEST_ROOT/edited.env" > "$TEST_ROOT/edited.log"
+kubectl kustomize "$FIXTURE/.generated/server-k8s/$RUN-edited" >/dev/null
+
+# 删除目标字段模拟模板损坏，再恢复并用同一 INSTANCE 重试。
+settings atomic server k8s
+cp "$FIXTURE/server/k8s/config/headplane.example.yaml" "$TEST_ROOT/headplane.saved.yaml"
+sed -i '/^[[:space:]]*cookie_secret:/d' "$FIXTURE/server/k8s/config/headplane.example.yaml"
+if bash "$FIXTURE/server/k8s/configure.sh" "$TEST_ROOT/atomic.env" > "$TEST_ROOT/atomic.log" 2>&1; then exit 1; fi
+[[ ! -e "$FIXTURE/.generated/server-k8s/$RUN-atomic" ]]
+if find "$FIXTURE/.generated" -maxdepth 1 -name '.tmp-config-*' | grep -q .; then exit 1; fi
+cp "$TEST_ROOT/headplane.saved.yaml" "$FIXTURE/server/k8s/config/headplane.example.yaml"
+bash "$FIXTURE/server/k8s/configure.sh" "$TEST_ROOT/atomic.env" > "$TEST_ROOT/atomic-retry.log"
+kubectl kustomize "$FIXTURE/.generated/server-k8s/$RUN-atomic" >/dev/null
+printf 'Configuration generation, edited values, failure cleanup and retry checks passed.\n'
 printf 'Dummy test artifacts: %s\n' "$TEST_ROOT"
 
 

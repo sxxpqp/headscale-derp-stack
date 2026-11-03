@@ -92,6 +92,44 @@ replace() {
   new="${new//\\/\\\\}"; new="${new//&/\\&}"; new="${new//|/\\|}"
   sed -i "s|$old|$new|g" "$file"
 }
+# 只更新模板中的标量字段路径，不依赖原先的示例值。
+# 适用于仓库的缩进式 YAML 配置；字段缺失/重复时明确报错。
+yaml_set() {
+  local file="$1" field="$2" value="$3" temporary
+  temporary="$(mktemp "$file.XXXXXX")"
+  if ! awk -v target="$field" -v replacement="$value" '
+    {
+      match($0, /^ */)
+      indentation = RLENGTH
+      body = substr($0, indentation + 1)
+      if (body ~ /^[A-Za-z_][A-Za-z0-9_]* *:/) {
+        key = substr(body, 1, index(body, ":") - 1)
+        sub(/ *$/, "", key)
+        while (depth > 0 && levels[depth] >= indentation) depth--
+        path = ""
+        for (i = 1; i <= depth; i++) path = path keys[i] "."
+        path = path key
+        if (path == target) {
+          printf "%s%s: %s\n", substr($0, 1, indentation), key, replacement
+          found++
+        } else print
+        depth++
+        levels[depth] = indentation
+        keys[depth] = key
+      } else print
+    }
+    END { if (found != 1) exit 42 }
+  ' "$file" > "$temporary"; then
+    die "配置字段缺失或重复：$field（$file），请保留该字段后重试"
+  fi
+  mv -- "$temporary" "$file"
+}
+cleanup_generation() {
+  # 只清理 mktemp 在 .generated 下创建的本次临时目录。
+  case "${STAGING_DIR:-}" in
+    "$ROOT/.generated/.tmp-config-"*) rm -rf -- "$STAGING_DIR" ;;
+  esac
+}
 storage_patch() {
   [[ -n "$STORAGE_CLASS" ]] || return 0
   local pvc
@@ -155,6 +193,7 @@ if [[ "$MODE" == k8s ]]; then
   check STORAGE_CLASS optional_name
 fi
 if [[ "$ROLE" == server && "$MODE" == k8s ]]; then
+  command -v kubectl >/dev/null || die '服务端 K8s 配置生成需要 kubectl 进行本地资源修改'
   check INGRESS_CLASS name_ok
   check TLS_SECRET name_ok
   # 保留对旧 TLS_IMPORT 变量的读取兼容，但不再由它决定是否导入。
@@ -187,23 +226,35 @@ if [[ "$ROLE" == client ]]; then
   if [[ "$EXIT_NODE" == y ]]; then EXTRA_ARGS+=' --advertise-exit-node'; fi
 fi
 printf '变量校验通过，生成配置：%s/%s\n' "$ROLE" "$MODE"
-mkdir -p -- "$OUT"
+FINAL_OUT="$OUT"
+mkdir -p -- "$ROOT/.generated"
+STAGING_DIR="$(mktemp -d "$ROOT/.generated/.tmp-config-XXXXXX")"
+OUT="$STAGING_DIR"
+trap cleanup_generation EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 if [[ "$ROLE" == server ]]; then
   copy_file config/headscale.example.yaml config/headscale.yaml
   copy_file config/headplane.example.yaml config/headplane.yaml
   copy_file config/policy.hujson
-  replace "$OUT/config/headscale.yaml" 'https://vpn\.example\.com' "$PUBLIC_URL"
-  replace "$OUT/config/headscale.yaml" '203\.0\.113\.10' "$PUBLIC_IPV4"
-  replace "$OUT/config/headscale.yaml" 'ts\.corp\.internal' "$MAGIC_DOMAIN"
-  replace "$OUT/config/headplane.yaml" 'https://vpn\.example\.com' "$PUBLIC_URL"
-  replace "$OUT/config/headplane.yaml" REPLACE_WITH_32_CHAR_RANDOM_VALUE "$COOKIE"
+  yaml_set "$OUT/config/headscale.yaml" server_url "\"$PUBLIC_URL\""
+  yaml_set "$OUT/config/headscale.yaml" derp.server.ipv4 "\"$PUBLIC_IPV4\""
+  yaml_set "$OUT/config/headscale.yaml" dns.base_domain "\"$MAGIC_DOMAIN\""
+  yaml_set "$OUT/config/headplane.yaml" server.base_url "\"$PUBLIC_URL\""
+  yaml_set "$OUT/config/headplane.yaml" headscale.public_url "\"$PUBLIC_URL\""
+  yaml_set "$OUT/config/headplane.yaml" server.cookie_secret "\"$COOKIE\""
   unset COOKIE
   if [[ "$MODE" == k8s ]]; then
     for file in namespace.yaml storage.yaml services.yaml workloads.yaml ingress.yaml kustomization.yaml; do copy_file "$file"; done
-    replace "$OUT/workloads.yaml" REPLACE_WITH_IDC_NODE "$NODE"
-    replace "$OUT/ingress.yaml" REPLACE_WITH_INGRESS_CLASS "$INGRESS_CLASS"
-    replace "$OUT/ingress.yaml" 'vpn\.example\.com' "$HOST"
-    replace "$OUT/ingress.yaml" 'secretName: headscale-tls' "secretName: $TLS_SECRET"
+    replace "$OUT/workloads.yaml" '"kubernetes.io/hostname": "[^"]*"' "\"kubernetes.io/hostname\": \"$NODE\""
+    # --local 解析本地资源，不连接集群；原域名、class、Secret 已改过也能更新。
+    kubectl patch --local -f "$OUT/ingress.yaml" --type=json -p "[
+      {\"op\":\"replace\",\"path\":\"/spec/ingressClassName\",\"value\":\"$INGRESS_CLASS\"},
+      {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"$HOST\"},
+      {\"op\":\"replace\",\"path\":\"/spec/tls/0/secretName\",\"value\":\"$TLS_SECRET\"},
+      {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"$HOST\"}
+    ]" -o yaml > "$OUT/ingress.updated.yaml"
+    mv -- "$OUT/ingress.updated.yaml" "$OUT/ingress.yaml"
     storage_patch headscale-data headplane-data
     if [[ "$TLS_IMPORT" == y ]]; then
       kubectl create secret tls "$TLS_SECRET" --cert="$TLS_CERT" --key="$TLS_KEY" \
@@ -250,6 +301,11 @@ EOF
   unset AUTH_KEY
 fi
 
+# 仅在全部生成成功后发布；GNU mv -T -n 不覆盖同时出现的同名目录。
+mv -T -n -- "$STAGING_DIR" "$FINAL_OUT"
+[[ ! -e "$STAGING_DIR" ]] || die "目标目录已由其他进程创建，本次未覆盖：$FINAL_OUT"
+trap - EXIT INT TERM
+OUT="$FINAL_OUT"
 printf '已生成：%s\n' "$OUT"
 printf '模板和现有部署均未修改。生成目录含密钥，不提交或发送完整内容。\n'
 printf '检查后执行（以下仅打印，不自动运行）：\n'
