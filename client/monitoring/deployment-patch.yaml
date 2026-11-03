@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tailscale
+spec:
+  template:
+    spec:
+      containers:
+        - name: tailscale
+          env:
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: TS_ENABLE_METRICS
+              value: "true"
+            # hostNetwork 模式；先确认 hostIP 是受保护的内网 IP。
+            - name: TS_LOCAL_ADDR_PORT
+              value: "$(NODE_IP):9002"
+          ports:
+            - name: ts-metrics
+              containerPort: 9002
+              protocol: TCP
+        - name: alloy
+          image: grafana/alloy:v1.21.3
+          imagePullPolicy: IfNotPresent
+          args:
+            - run
+            - --server.http.listen-addr=127.0.0.1:12346
+            - --storage.path=/var/lib/alloy
+            - /etc/alloy/config.alloy
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: LOKI_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: tailscale-alloy
+                  key: LOKI_URL
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              host: 127.0.0.1
+              path: /-/ready
+              port: 12346
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: alloy-config
+              mountPath: /etc/alloy
+              readOnly: true
+            - name: host-var-log
+              mountPath: /var/log
+              readOnly: true
+            - name: host-run-log
+              mountPath: /run/log
+              readOnly: true
+            - name: host-machine-id
+              mountPath: /etc/machine-id
+              readOnly: true
+            # 与原有节点状态使用同一个 PVC，但放在独立子目录。
+            - name: state
+              mountPath: /var/lib/alloy
+              subPath: alloy
+      volumes:
+        - name: alloy-config
+          configMap:
+            name: tailscale-alloy
+        - name: host-var-log
+          hostPath:
+            path: /var/log
+            type: Directory
+        - name: host-run-log
+          hostPath:
+            path: /run/log
+            type: Directory
+        - name: host-machine-id
+          hostPath:
+            path: /etc/machine-id
+            type: File

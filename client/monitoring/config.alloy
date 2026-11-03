@@ -1,0 +1,31 @@
+// 只采集本机内核中带 TS_AUDIT 前缀的记录，无需 Kubernetes API。
+// 目标 IP、端口保留在正文，避免成为 Loki 高基数索引标签。
+loki.source.journal "tailscale" {
+  matches    = "_TRANSPORT=kernel"
+  max_age    = "1h"
+  labels     = {
+    app  = "tailscale-audit",
+    node = sys.env("NODE_NAME"),
+  }
+  forward_to = [loki.process.tailscale.receiver]
+}
+
+loki.process "tailscale" {
+  stage.match {
+    selector = "{app=\"tailscale-audit\"} !~ \"TS_AUDIT \""
+    action   = "drop"
+  }
+  forward_to = [loki.write.existing.receiver]
+}
+
+loki.write "existing" {
+  endpoint {
+    url = sys.env("LOKI_URL")
+    // 当前按无租户、无认证配置；确认现网网关要求后再添加。
+    // tenant_id = "your-tenant"
+    // basic_auth {
+    //   username      = "your-user"
+    //   password_file = "/run/secrets/loki/password"
+    // }
+  }
+}

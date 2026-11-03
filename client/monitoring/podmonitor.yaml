@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: tailscale-client
+  labels:
+    # 必改：匹配现网 Prometheus.spec.podMonitorSelector。
+    # 常见 Helm 安装使用 release 标签，但应以实际 selector 为准。
+    release: REPLACE_WITH_PROMETHEUS_RELEASE
+spec:
+  jobLabel: app
+  namespaceSelector:
+    matchNames: [tailscale-client]
+  selector:
+    matchLabels:
+      app: tailscale-client
+  podMetricsEndpoints:
+    - port: ts-metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node

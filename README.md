@@ -10,6 +10,8 @@
 
 **逐步操作：[按配置文件替换部署教程](TUTORIAL.md)**，包含 Headplane 创建客户端密钥、填写配置及后续变更方法。
 
+**现有监控平台接入：[Kubernetes PodMonitor + Alloy → Loki](client/monitoring/README.md)**，含 Grafana 导入面板和网关访问记录配置。
+
 ## 选择部署方式
 
 | 方式 | 适用环境 | HTTPS 443 | STUN UDP 3478 | 部署文档 |

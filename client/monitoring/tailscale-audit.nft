@@ -1,0 +1,13 @@
+# 在运行 Tailscale Pod 的 Linux 节点加载，不在 Headscale 服务端加载。
+# 独立日志表，不清空现有规则、不添加放行/拒绝规则。
+# 同名表已存在时不要重复加载，更新及回滚见 README。
+table inet tailscale_audit {
+  chain input_audit {
+    type filter hook input priority -10; policy accept;
+    iifname "tailscale0" ct state new counter limit rate 20/second burst 100 packets log prefix "TS_AUDIT " level info
+  }
+  chain forward_audit {
+    type filter hook forward priority -10; policy accept;
+    iifname "tailscale0" ct state new counter limit rate 20/second burst 100 packets log prefix "TS_AUDIT " level info
+  }
+}

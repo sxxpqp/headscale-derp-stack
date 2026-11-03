@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tailscale-client
+resources:
+  - ../k8s
+  - podmonitor.yaml
+configMapGenerator:
+  - name: tailscale-alloy
+    files:
+      - config.alloy
+    literals:
+      # 必改：节点内网 IP、NodePort 和实际写入路径。
+      - LOKI_URL=http://loki.example.invalid:31080/loki/api/v1/push
+patches:
+  - path: deployment-patch.yaml
