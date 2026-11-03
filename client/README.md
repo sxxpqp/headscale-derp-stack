@@ -22,7 +22,9 @@ sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
 
 ## 2. 生成客户端注册密钥
 
-在 Headscale 服务端执行，使用已存在用户的 ID：
+优先通过 Headplane：**Settings → Pre-Auth Keys → Create pre-auth key**，选择所属用户、关闭 Ephemeral，按需设置 Reusable 和有效期，生成后立即复制到 Docker .env 的 TS_AUTHKEY 或 K8s tailscale-auth Secret 的 authkey。此密钥不是管理登录用的 API Key。
+
+完整配置替换步骤见 [部署教程](../TUTORIAL.md)。也可在 Headscale 服务端执行以下命令，使用已存在用户的 ID：
 
 ```sh
 # 仓库根目录进入服务端 Docker 部署目录
