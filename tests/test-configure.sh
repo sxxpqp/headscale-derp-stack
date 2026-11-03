@@ -149,7 +149,10 @@ for file in headscale.example.yaml headplane.example.yaml policy.hujson; do
 done
 sed -i 's/vpn\.example\.com/already.edited.example/g; s/REPLACE_WITH_32_CHAR_RANDOM_VALUE/fedcba9876543210fedcba9876543210/g' "$FIXTURE/server/k8s/config/headplane.example.yaml"
 settings edited server k8s
+# 回归：首次生成，最终父目录完全不存在。
+[[ ! -e "$FIXTURE/.generated/server-k8s" ]]
 bash "$FIXTURE/server/k8s/configure.sh" "$TEST_ROOT/edited.env" > "$TEST_ROOT/edited.log"
+[[ -d "$FIXTURE/.generated/server-k8s/$RUN-edited" ]]
 kubectl kustomize "$FIXTURE/.generated/server-k8s/$RUN-edited" >/dev/null
 
 # 删除目标字段模拟模板损坏，再恢复并用同一 INSTANCE 重试。

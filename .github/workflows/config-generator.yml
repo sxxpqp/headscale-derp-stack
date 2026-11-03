@@ -1,0 +1,38 @@
+name: Configuration generator checks
+on:
+  push:
+    paths:
+      - '.github/workflows/config-generator.yml'
+      - 'lib/**'
+      - 'server/**'
+      - 'client/**'
+      - 'tests/**'
+  pull_request:
+    paths:
+      - '.github/workflows/config-generator.yml'
+      - 'lib/**'
+      - 'server/**'
+      - 'client/**'
+      - 'tests/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check tools
+        run: |
+          bash --version
+          shellcheck --version
+          kubectl version --client
+          docker compose version
+          openssl version
+      - name: Generate and validate all configurations without deploying
+        run: bash tests/test-configure.sh

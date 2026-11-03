@@ -301,6 +301,8 @@ EOF
   unset AUTH_KEY
 fi
 
+# 先创建最终目录的父目录；首次生成时 server-k8s 等目录可能尚不存在。
+mkdir -p -- "$(dirname -- "$FINAL_OUT")"
 # 仅在全部生成成功后发布；GNU mv -T -n 不覆盖同时出现的同名目录。
 mv -T -n -- "$STAGING_DIR" "$FINAL_OUT"
 [[ ! -e "$STAGING_DIR" ]] || die "目标目录已由其他进程创建，本次未覆盖：$FINAL_OUT"
