@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# 仅使用虚构凭据在 .generated 下验证，不部署或连接集群。
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+for cmd in bash kubectl docker openssl; do command -v "$cmd" >/dev/null; done
+if command -v shellcheck >/dev/null; then shellcheck scripts/configure.sh scripts/test-configure.sh; fi
+bash -n scripts/configure.sh
+umask 077
+RUN="smoke-$$"
+TEST_ROOT="$PWD/.generated/$RUN"
+mkdir -p "$TEST_ROOT"
+KEY=hskey-auth-smoke-only
+COOKIE=0123456789abcdef0123456789abcdef
+
+settings() {
+  local label="$1" role="$2" mode="$3"
+  cat > "$TEST_ROOT/$label.env" <<EOF
+ROLE=$role
+MODE=$mode
+INSTANCE=$RUN-$label
+PUBLIC_URL=https://vpn.test.example:8443
+PUBLIC_IPV4=8.8.8.8
+MAGIC_DOMAIN=ts.corp.internal
+COOKIE_SECRET=$COOKIE
+NODE=node-a
+STORAGE_CLASS=fast-storage
+INGRESS_CLASS=nginx
+TLS_SECRET=existing-tls
+TLS_IMPORT=n
+TLS_CERT=/etc/certs/full chain.pem
+TLS_KEY=/etc/certs/privkey.pem
+CLIENT_NAME=router-a
+AUTH_KEY=$KEY
+ROUTES=172.16.0.0/24
+ACCEPT_ROUTES=y
+EXIT_NODE=n
+EOF
+}
+run() {
+  local label="$1"
+  bash scripts/configure.sh "$TEST_ROOT/$label.env" > "$TEST_ROOT/$label.log"
+  if grep -q -e "$KEY" -e "$COOKIE" "$TEST_ROOT/$label.log"; then
+    printf 'Secret leaked into output\n' >&2; exit 1
+  fi
+}
+reject() {
+  local label="$1"
+  if bash scripts/configure.sh "$TEST_ROOT/$label.env" > "$TEST_ROOT/$label.log" 2>&1; then
+    printf 'Invalid settings were accepted: %s\n' "$label" >&2; exit 1
+  fi
+}
+settings sd server docker
+run sd
+SD="$PWD/.generated/server-docker/$RUN-sd"
+docker compose -f "$SD/compose.yaml" config --quiet
+grep -q 'listen 8443 ssl;' "$SD/nginx/headscale.conf"
+# shellcheck disable=SC2016
+grep -Fq 'https://$host:8443$request_uri' "$SD/nginx/headscale.conf"
+grep -Fq 'ssl_certificate "/etc/certs/full chain.pem";' "$SD/nginx/headscale.conf"
+
+settings sk server k8s
+run sk
+SK="$PWD/.generated/server-k8s/$RUN-sk"
+rendered="$(kubectl kustomize "$SK")"
+grep -q 'secretName: headplane-config-' <<< "$rendered"
+grep -q 'secretName: existing-tls' <<< "$rendered"
+grep -q 'storageClassName: fast-storage' <<< "$rendered"
+if grep -q 'host: vpn.test.example:8443' <<< "$rendered"; then exit 1; fi
+
+settings cd client docker
+run cd
+CD="$PWD/.generated/client-docker/$RUN-cd"
+docker compose -f "$CD/compose.yaml" config --quiet
+
+settings ck client k8s
+sed -i 's/^ROUTES=.*/ROUTES=/' "$TEST_ROOT/ck.env"
+run ck
+CK="$PWD/.generated/client-k8s/$RUN-ck"
+rendered="$(kubectl kustomize "$CK")"
+grep -q 'name: tailscale-auth-' <<< "$rendered"
+if grep -q -- '--advertise-exit-node' "$CK/deployment.yaml"; then exit 1; fi
+
+# 同名目录拒绝覆盖。
+before="$(cksum "$SD/config/headplane.yaml")"
+reject sd
+[[ "$before" == "$(cksum "$SD/config/headplane.yaml")" ]]
+
+settings invalid client docker
+sed -i 's|^ROUTES=.*|ROUTES=172.16.0.5/24|' "$TEST_ROOT/invalid.env"
+reject invalid
+[[ ! -e ".generated/client-docker/$RUN-invalid" ]]
+
+settings duplicate client docker
+printf 'ROLE=server\n' >> "$TEST_ROOT/duplicate.env"
+reject duplicate
+settings unknown client docker
+printf 'HOME=/tmp/should-not-be-used\n' >> "$TEST_ROOT/unknown.env"
+reject unknown
+
+# 不执行变量文件中的命令替换。
+settings injection client docker
+# 此处有意把命令替换作为普通文本传入变量文件。
+# shellcheck disable=SC2016
+printf '%s\n' 'UNSUPPORTED=$(touch SHOULD_NOT_EXIST)' >> "$TEST_ROOT/injection.env"
+reject injection
+[[ ! -e SHOULD_NOT_EXIST ]]
+
+# 本地 TLS Secret 生成，无集群操作。
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=vpn.test.example \
+  -keyout "$TEST_ROOT/tls.key" -out "$TEST_ROOT/tls.crt" >/dev/null 2>&1
+settings tls server k8s
+sed -i 's/^TLS_IMPORT=.*/TLS_IMPORT=y/' "$TEST_ROOT/tls.env"
+sed -i "s|^TLS_CERT=.*|TLS_CERT=$TEST_ROOT/tls.crt|" "$TEST_ROOT/tls.env"
+sed -i "s|^TLS_KEY=.*|TLS_KEY=$TEST_ROOT/tls.key|" "$TEST_ROOT/tls.env"
+run tls
+rendered="$(kubectl kustomize ".generated/server-k8s/$RUN-tls")"
+grep -q 'type: kubernetes.io/tls' <<< "$rendered"
+printf 'Generation, TLS import, secret masking, input validation and overwrite checks passed.\n'
+printf 'Dummy test artifacts: %s\n' "$TEST_ROOT"
+
+

@@ -12,6 +12,19 @@
 
 **现有监控平台接入：[Kubernetes PodMonitor + Alloy → Loki](client/monitoring/README.md)**，含 Grafana 导入面板和网关访问记录配置。
 
+## 变量生成配置（非交互）
+
+不用逐个修改 YAML，可先填写变量文件，再生成部署配置：
+
+```sh
+cp scripts/config.example.env setup.env
+chmod 600 setup.env
+nano setup.env
+bash scripts/configure.sh setup.env
+```
+
+支持服务端 / 客户端及 Docker / K8s。结果保存到 `.generated/<部署侧>-<方式>/<INSTANCE>/`，只生成文件，不自动部署，不覆盖原配置。参数、Secret 生成和四种部署示例见 [生成器说明](scripts/README.md)。
+
 ## 选择部署方式
 
 | 方式 | 适用环境 | HTTPS 443 | STUN UDP 3478 | 部署文档 |
