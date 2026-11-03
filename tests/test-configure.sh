@@ -40,6 +40,7 @@ EOF
 }
 run() {
   local label="$1"
+  printf 'Checking %s\n' "$label"
   bash "${ROLES[$label]}/${MODES[$label]}/configure.sh" "$TEST_ROOT/$label.env" > "$TEST_ROOT/$label.log"
   if grep -q -e "$KEY" -e "$COOKIE" "$TEST_ROOT/$label.log"; then
     printf 'Secret leaked into output\n' >&2; exit 1

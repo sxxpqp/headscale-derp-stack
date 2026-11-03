@@ -185,7 +185,9 @@ if [[ "$ROLE" == server ]]; then
     command -v openssl >/dev/null || die 'COOKIE_SECRET 留空时需要 openssl 自动生成'
     COOKIE="$(openssl rand -hex 16)"
   fi
-  secret_ok "$COOKIE" && [[ ${#COOKIE} -eq 32 ]] || die 'COOKIE_SECRET 必须为32字符字母、数字、点、下划线或连字符'
+  if ! secret_ok "$COOKIE" || [[ ${#COOKIE} -ne 32 ]]; then
+    die 'COOKIE_SECRET 必须为32字符字母、数字、点、下划线或连字符'
+  fi
   unset COOKIE_SECRET
 fi
 if [[ "$MODE" == k8s ]]; then
