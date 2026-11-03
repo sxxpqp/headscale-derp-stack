@@ -8,5 +8,5 @@
 
 # 本地生成配置和输入变量，包含真实密钥
 /.generated/
-/setup.env
-/setup.*.env
+**/setup.env
+**/setup.*.env

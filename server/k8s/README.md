@@ -1,5 +1,19 @@
 # Kubernetes 部署
 
+## 本目录配置生成脚本（非交互）
+
+在本目录执行：
+```sh
+cp config.example.env setup.env
+chmod 600 setup.env
+nano setup.env
+bash configure.sh
+```
+
+部署侧和方式已固定为 server/k8s，不用填写 ROLE 或 MODE。结果保存到仓库根目录的 `.generated/server-k8s/<INSTANCE>/`，检查后按脚本打印的命令部署。脚本不覆盖模板或已有配置，也不会自动部署。
+
+完整变量说明见 [配置生成说明](../../CONFIGURE.md)。也可以继续按下面的原生部署教程操作。
+
 **先看 [部署前配置清单](../CONFIGURATION.md)**，配置文件中也已标明必改项。
 
 从仓库根目录执行 `cd server/k8s`，下面命令均在本目录执行。使用已有集群、Ingress Controller 和 StorageClass，不安装或升级这些组件。

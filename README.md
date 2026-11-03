@@ -14,23 +14,25 @@
 
 ## 变量生成配置（非交互）
 
-不用逐个修改 YAML，可先填写变量文件，再生成部署配置：
+脚本和变量模板均在对应部署目录：
 
+| 部署目标 | 脚本 | 变量模板 |
+| --- | --- | --- |
+| 服务端 Docker | [configure.sh](server/docker/configure.sh) | [config.example.env](server/docker/config.example.env) |
+| 服务端 K8s | [configure.sh](server/k8s/configure.sh) | [config.example.env](server/k8s/config.example.env) |
+| 客户端 Docker | [configure.sh](client/docker/configure.sh) | [config.example.env](client/docker/config.example.env) |
+| 客户端 K8s | [configure.sh](client/k8s/configure.sh) | [config.example.env](client/k8s/config.example.env) |
+
+例如服务端 K8s：
 ```sh
-# Docker：编辑变量后生成
-cp scripts/docker.example.env setup.docker.env
-chmod 600 setup.docker.env
-nano setup.docker.env
-bash scripts/configure-docker.sh setup.docker.env
-
-# Kubernetes：编辑变量后生成
-cp scripts/k8s.example.env setup.k8s.env
-chmod 600 setup.k8s.env
-nano setup.k8s.env
-bash scripts/configure-k8s.sh setup.k8s.env
+cd server/k8s
+cp config.example.env setup.env
+chmod 600 setup.env
+nano setup.env
+bash configure.sh
 ```
 
-两个脚本分别固定 Docker / K8s，变量文件用 ROLE=server/client 选择服务端或客户端。结果保存到 `.generated/<部署侧>-<方式>/<INSTANCE>/`，只生成文件，不自动部署，不覆盖原配置。参数、Secret 生成和四种部署示例见 [生成器说明](scripts/README.md)。
+其他部署目录用法相同，不填写 ROLE 或 MODE。输出仍在仓库根目录 `.generated/<部署侧>-<方式>/<INSTANCE>/`。只生成文件，不自动部署，详见 [配置生成说明](CONFIGURE.md)。
 
 ## 选择部署方式
 
