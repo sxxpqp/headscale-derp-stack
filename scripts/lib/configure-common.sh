@@ -2,7 +2,7 @@
 # Linux 配置生成器，只写入 .generated，不部署或修改宿主机。
 set -euo pipefail
 umask 077
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 die() { printf '错误：%s\n' "$*" >&2; exit 1; }
 name_ok() { [[ ${#1} -le 63 && "$1" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]]; }
 domain_ok() {
@@ -70,7 +70,7 @@ load_settings() {
     [[ "$line" == *=* ]] || die "变量文件第 $line_no 行不是 KEY=value"
     key="${line%%=*}"; value="${line#*=}"
     case "$key" in
-      ROLE|MODE|INSTANCE|PUBLIC_URL|PUBLIC_IPV4|MAGIC_DOMAIN|COOKIE_SECRET|NODE|STORAGE_CLASS|INGRESS_CLASS|TLS_SECRET|TLS_IMPORT|TLS_CERT|TLS_KEY|CLIENT_NAME|AUTH_KEY|ROUTES|ACCEPT_ROUTES|EXIT_NODE) ;;
+      ROLE|INSTANCE|PUBLIC_URL|PUBLIC_IPV4|MAGIC_DOMAIN|COOKIE_SECRET|NODE|STORAGE_CLASS|INGRESS_CLASS|TLS_SECRET|TLS_IMPORT|TLS_CERT|TLS_KEY|CLIENT_NAME|AUTH_KEY|ROUTES|ACCEPT_ROUTES|EXIT_NODE) ;;
       *) die "变量文件第 $line_no 行存在不支持的变量名" ;;
     esac
     [[ -z "${seen[$key]:-}" ]] || die "变量重复：$key"
@@ -109,20 +109,22 @@ EOF
   done
 }
 
+MODE="${1:?内部入口需要指定 docker 或 k8s}"
+shift
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
-  printf '用法：bash scripts/configure.sh [变量文件，默认仓库根目录 setup.env]\n'
+  printf '用法：bash scripts/configure-%s.sh [变量文件，默认 setup.%s.env]\n' "$MODE" "$MODE"
   exit 0
 fi
 [[ $# -le 1 ]] || die '只接受一个变量文件参数'
 (( BASH_VERSINFO[0] >= 4 )) || die '需要 Bash 4 或更新版本'
-ROLE=server; MODE=k8s; INSTANCE=default
+ROLE=server; INSTANCE=default
 PUBLIC_URL=https://hb.sxxpqp.top
 PUBLIC_IPV4=''; MAGIC_DOMAIN=ts.corp.internal; COOKIE_SECRET=''
 NODE=''; STORAGE_CLASS=''; INGRESS_CLASS=''
 TLS_SECRET=headscale-tls; TLS_IMPORT=n; TLS_CERT=''; TLS_KEY=''
 CLIENT_NAME=site-a-router; AUTH_KEY=''; ROUTES=''; ACCEPT_ROUTES=y; EXIT_NODE=n
 
-load_settings "${1:-$ROOT/setup.env}"
+load_settings "${1:-$ROOT/setup.$MODE.env}"
 check ROLE role_ok
 check MODE mode_ok
 check INSTANCE name_ok

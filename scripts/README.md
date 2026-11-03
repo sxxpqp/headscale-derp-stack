@@ -6,13 +6,25 @@
 
 Linux 上需要 Bash 4+、GNU sed、grep、cp 等常用工具；服务端 COOKIE_SECRET 留空时需要 openssl。只有 TLS_IMPORT=y 时，生成阶段需要 kubectl（仅本地 create secret --dry-run=client，不连接集群）。部署阶段再使用现有 Docker Compose 或 kubectl。
 
-从仓库根目录：
+从仓库根目录选择对应入口；部署方式由脚本固定，变量文件中不再填写 MODE。
+
+Docker：
 ```sh
-cp scripts/config.example.env setup.env
-chmod 600 setup.env
-nano setup.env
-bash scripts/configure.sh setup.env
+cp scripts/docker.example.env setup.docker.env
+chmod 600 setup.docker.env
+nano setup.docker.env
+bash scripts/configure-docker.sh setup.docker.env
 ```
+
+Kubernetes：
+```sh
+cp scripts/k8s.example.env setup.k8s.env
+chmod 600 setup.k8s.env
+nano setup.k8s.env
+bash scripts/configure-k8s.sh setup.k8s.env
+```
+
+省略变量文件参数时，两个脚本分别读取仓库根目录 setup.docker.env 和 setup.k8s.env。两者都支持 ROLE=server 或 ROLE=client。共同逻辑放在 lib/configure-common.sh，不需要编辑或直接执行它。
 
 以后只修改变量文件，不修改脚本。变量文件是纯 KEY=value 数据：
 - 不加引号，不写 export，不在等号两边加空格。
@@ -22,10 +34,9 @@ bash scripts/configure.sh setup.env
 
 ### 例：服务端 K8s
 
-在 setup.env 中修改这些字段；其余保留示例：
+在 setup.k8s.env 中修改这些字段；其余保留示例：
 ```dotenv
 ROLE=server
-MODE=k8s
 INSTANCE=prod
 PUBLIC_URL=https://hb.sxxpqp.top:8443
 PUBLIC_IPV4=替换为实际公网IPv4
@@ -52,10 +63,9 @@ PUBLIC_URL 可以包含 HTTPS 端口，Ingress host 字段会只保留域名；C
 
 ### 例：服务端 Docker
 
-在原变量文件中改：
+在 setup.docker.env 中修改：
 ```dotenv
 ROLE=server
-MODE=docker
 INSTANCE=prod-docker
 PUBLIC_URL=https://hb.sxxpqp.top:8443
 PUBLIC_IPV4=替换为实际公网IPv4
@@ -69,10 +79,9 @@ TLS_KEY=/etc/letsencrypt/live/hb.sxxpqp.top/privkey.pem
 
 在 Headplane 的 Settings → Pre-Auth Keys 创建密钥，持久网关关闭 Ephemeral；它不是管理登录 API Key。
 
-修改原变量文件：
+客户端 K8s 修改 setup.k8s.env：
 ```dotenv
 ROLE=client
-MODE=k8s
 INSTANCE=site-a
 PUBLIC_URL=https://hb.sxxpqp.top:8443
 NODE=替换为网关节点hostname
@@ -84,7 +93,7 @@ ACCEPT_ROUTES=y
 EXIT_NODE=n
 ```
 
-Docker 只需 MODE=docker，忽略 NODE、StorageClass。客户端会忽略服务端的公网 IP、会话密钥和 Ingress 配置。
+客户端 Docker 修改 setup.docker.env，并运行 configure-docker.sh，不填写 NODE、StorageClass。客户端会忽略服务端的公网 IP、会话密钥和 Ingress 配置。
 
 ROUTES 支持规范 IPv4 子网地址及逗号分隔多个网段，例如 172.16.0.0/24,192.168.10.0/24，不接受 172.16.0.5/24。IPv6 路由可在生成后的配置中按客户端原生参数手动添加。
 
@@ -101,7 +110,7 @@ K8s 的预认证密钥写入 config/authkey，kustomization.yaml 自动生成并
   client-docker/site-a/
 ```
 
-setup.env、setup.*.env、.generated/ 已加入 .gitignore。生成文件含真实密钥，使用受控管理机保存；普通 Unix 环境下新文件默认600、目录700。同名输出目录存在时退出，不自动覆盖。失败时也可能留下部分生成文件，检查后使用新的 INSTANCE 重试。
+setup.docker.env、setup.k8s.env、setup.*.env、.generated/ 已加入 .gitignore。生成文件含真实密钥，使用受控管理机保存；普通 Unix 环境下新文件默认600、目录700。同名输出目录存在时退出，不自动覆盖。失败时也可能留下部分生成文件，检查后使用新的 INSTANCE 重试。
 
 脚本不会读取原部署中未跟踪的配置文件或私钥，仅从仓库模板生成。源 manifest 如果已被手工修改，缺少预期替换字段时会报错；可在干净仓库副本中运行，再合并自定义 ACL、DNS 或其他修改。默认复制仓库的全放行 ACL，不会自动继承旧部署自定义策略。
 
@@ -129,10 +138,16 @@ INSTANCE 只区分本地生成目录，不会创建新的 namespace、Kubernetes
 ## 本地检查
 
 ```sh
-shellcheck scripts/configure.sh scripts/test-configure.sh
-bash -n scripts/configure.sh
+shellcheck scripts/configure-docker.sh scripts/configure-k8s.sh scripts/lib/configure-common.sh scripts/test-configure.sh
+bash -n scripts/configure-docker.sh
+bash -n scripts/configure-k8s.sh
+bash -n scripts/lib/configure-common.sh
 # 可选：本地生成测试文件并校验 Compose/Kustomize，不部署、不访问集群
 bash scripts/test-configure.sh
 ```
 
 冒烟测试依赖 Docker Compose CLI、kubectl 和 openssl；仅使用虚构密钥，测试产物放在 .generated/。不要求 Docker 引擎在线，但需要这些 CLI 可运行。
+
+## 从旧入口迁移
+
+旧 configure.sh 和 config.example.env 已由两个专用入口及模板替代。把原变量值复制到对应的新变量文件，并移除 MODE 行；生成目录格式和部署资源名称保持不变。脚本只生成文件，Docker 的 up 和 K8s 的 apply 仍由你检查后执行。

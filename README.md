@@ -17,13 +17,20 @@
 不用逐个修改 YAML，可先填写变量文件，再生成部署配置：
 
 ```sh
-cp scripts/config.example.env setup.env
-chmod 600 setup.env
-nano setup.env
-bash scripts/configure.sh setup.env
+# Docker：编辑变量后生成
+cp scripts/docker.example.env setup.docker.env
+chmod 600 setup.docker.env
+nano setup.docker.env
+bash scripts/configure-docker.sh setup.docker.env
+
+# Kubernetes：编辑变量后生成
+cp scripts/k8s.example.env setup.k8s.env
+chmod 600 setup.k8s.env
+nano setup.k8s.env
+bash scripts/configure-k8s.sh setup.k8s.env
 ```
 
-支持服务端 / 客户端及 Docker / K8s。结果保存到 `.generated/<部署侧>-<方式>/<INSTANCE>/`，只生成文件，不自动部署，不覆盖原配置。参数、Secret 生成和四种部署示例见 [生成器说明](scripts/README.md)。
+两个脚本分别固定 Docker / K8s，变量文件用 ROLE=server/client 选择服务端或客户端。结果保存到 `.generated/<部署侧>-<方式>/<INSTANCE>/`，只生成文件，不自动部署，不覆盖原配置。参数、Secret 生成和四种部署示例见 [生成器说明](scripts/README.md)。
 
 ## 选择部署方式
 

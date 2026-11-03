@@ -3,20 +3,21 @@
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 for cmd in bash kubectl docker openssl; do command -v "$cmd" >/dev/null; done
-if command -v shellcheck >/dev/null; then shellcheck scripts/configure.sh scripts/test-configure.sh; fi
-bash -n scripts/configure.sh
+if command -v shellcheck >/dev/null; then shellcheck scripts/configure-docker.sh scripts/configure-k8s.sh scripts/lib/configure-common.sh scripts/test-configure.sh; fi
+for entry in scripts/configure-docker.sh scripts/configure-k8s.sh scripts/lib/configure-common.sh; do bash -n "$entry"; done
 umask 077
 RUN="smoke-$$"
 TEST_ROOT="$PWD/.generated/$RUN"
 mkdir -p "$TEST_ROOT"
 KEY=hskey-auth-smoke-only
 COOKIE=0123456789abcdef0123456789abcdef
+declare -A MODES=()
 
 settings() {
   local label="$1" role="$2" mode="$3"
+  MODES["$label"]="$mode"
   cat > "$TEST_ROOT/$label.env" <<EOF
 ROLE=$role
-MODE=$mode
 INSTANCE=$RUN-$label
 PUBLIC_URL=https://vpn.test.example:8443
 PUBLIC_IPV4=8.8.8.8
@@ -38,14 +39,14 @@ EOF
 }
 run() {
   local label="$1"
-  bash scripts/configure.sh "$TEST_ROOT/$label.env" > "$TEST_ROOT/$label.log"
+  bash "scripts/configure-${MODES[$label]}.sh" "$TEST_ROOT/$label.env" > "$TEST_ROOT/$label.log"
   if grep -q -e "$KEY" -e "$COOKIE" "$TEST_ROOT/$label.log"; then
     printf 'Secret leaked into output\n' >&2; exit 1
   fi
 }
 reject() {
   local label="$1"
-  if bash scripts/configure.sh "$TEST_ROOT/$label.env" > "$TEST_ROOT/$label.log" 2>&1; then
+  if bash "scripts/configure-${MODES[$label]}.sh" "$TEST_ROOT/$label.env" > "$TEST_ROOT/$label.log" 2>&1; then
     printf 'Invalid settings were accepted: %s\n' "$label" >&2; exit 1
   fi
 }
@@ -104,6 +105,11 @@ settings injection client docker
 printf '%s\n' 'UNSUPPORTED=$(touch SHOULD_NOT_EXIST)' >> "$TEST_ROOT/injection.env"
 reject injection
 [[ ! -e SHOULD_NOT_EXIST ]]
+
+# 专用入口拒绝变量文件覆盖 MODE。
+settings modeoverride client docker
+printf "MODE=k8s\n" >> "$TEST_ROOT/modeoverride.env"
+reject modeoverride
 
 # 本地 TLS Secret 生成，无集群操作。
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=vpn.test.example \
