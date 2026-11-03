@@ -2,7 +2,7 @@
 
 **先看 [部署前配置清单](../CONFIGURATION.md)**，配置文件中也已标明必改项。
 
-美国 IDC 自建 Headscale 控制平面、内置 DERP/STUN 和 Headplane 管理界面。Docker Compose 部署，复用宿主机已有 Nginx 的 HTTPS 443。以下命令均在 `docker/` 目录执行。
+美国 IDC 自建 Headscale 控制平面、内置 DERP/STUN 和 Headplane 管理界面。Docker Compose 部署，复用宿主机已有 Nginx 的 HTTPS 443。先从仓库根目录执行 `cd server/docker`，以下命令均在此目录执行。
 
 ## 版本与范围
 

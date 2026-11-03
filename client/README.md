@@ -1,6 +1,6 @@
 # Tailscale 客户端（独立部署）
 
-本目录只部署 Tailscale，连接已部署的 Headscale；Headplane 仍在服务端的 Docker / K8s 清单中。DERP/STUN 使用 Headscale 内置功能，不是第四个独立容器。
+本目录只部署 Tailscale，连接已部署的 Headscale；Headplane 仍在[服务端](../server/README.md)的 Docker / K8s 清单中。DERP/STUN 使用 Headscale 内置功能，不是第四个独立容器。
 
 提供 Linux 宿主机 / K8s 节点网关模式：发布内网路由、接受其他路由，并可提供出口节点。Docker 使用 host 网络，Pod 使用 hostNetwork；Tailscale 将管理所选宿主机的路由和防火墙。每台主机只运行一个 tailscaled，不要与已有原生客户端、另一个容器或 Pod 同时运行。各网关分别部署，状态卷不能复制给另一台网关。
 
@@ -26,7 +26,7 @@ sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
 
 ```sh
 # 仓库根目录进入服务端 Docker 部署目录
-cd docker
+cd server/docker
 docker compose exec headscale headscale users list
 docker compose exec headscale headscale preauthkeys create --user 用户ID
 ```
@@ -43,7 +43,7 @@ kubectl -n headscale exec deployment/headscale -- headscale preauthkeys create -
 
 从仓库根目录执行：
 ```sh
-cd tailscale/docker
+cd client/docker
 cp .env.example .env
 chmod 600 .env
 # 编辑 .env：密钥、唯一节点名、控制域名、实际内网网段
@@ -64,7 +64,7 @@ docker compose exec tailscale tailscale status
 
 从仓库根目录执行：
 ```sh
-cd tailscale/k8s
+cd client/k8s
 # 修改 deployment.yaml：节点 hostname、节点名、控制域名、路由。
 # 无默认 StorageClass 时修改 storage.yaml。
 nano deployment.yaml

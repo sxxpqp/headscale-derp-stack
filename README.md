@@ -4,40 +4,48 @@
 
 组件分为 **Headscale 控制服务（含内置 DERP/STUN）**、**Headplane 管理界面**、**Tailscale 客户端**。前两者一起部署，客户端独立部署到各网关节点。
 
-客户端 Docker / Kubernetes 配置和操作步骤见 [tailscale/README.md](tailscale/README.md)。
+客户端 Docker / Kubernetes 配置和操作步骤见 [client/README.md](client/README.md)。
 
-**开始前先看：[部署前配置清单](CONFIGURATION.md)**，集中列出了所有必改字段及对应文件。
+**开始前先看：[服务端部署前配置清单](server/CONFIGURATION.md)**，集中列出了所有必改字段及对应文件。
 
 ## 选择部署方式
 
 | 方式 | 适用环境 | HTTPS 443 | STUN UDP 3478 | 部署文档 |
 | --- | --- | --- | --- | --- |
-| Docker Compose | 单台 IDC 服务器 | 复用宿主机 Nginx | Docker 端口映射 | [Docker 部署](docker/README.md) |
-| Kubernetes | 已有 K8s 集群 | 复用已有 Ingress Controller | 固定 IDC 节点 hostPort | [K8s 部署](k8s/README.md) |
+| Docker Compose | 单台 IDC 服务器 | 复用宿主机 Nginx | Docker 端口映射 | [Docker 部署](server/docker/README.md) |
+| Kubernetes | 已有 K8s 集群 | 复用已有 Ingress Controller | 固定 IDC 节点 hostPort | [K8s 部署](server/k8s/README.md) |
 
 ## 目录
 
 ```text
-tailscale/              # 独立客户端，与服务端分开启动
+server/                 # 服务端：Headscale + Headplane，含内置 DERP/STUN
+  README.md
+  CONFIGURATION.md
+  docker/               # Compose、配置模板、Nginx 示例
+  k8s/                  # Kustomize、配置模板、存储与入口
+client/                 # 客户端：Tailscale，独立启动
+  README.md
   docker/               # Linux host 网络网关
   k8s/                  # 单节点 hostNetwork 网关 Pod
-  README.md
-docker/                 # 服务端 Compose：Headscale + Headplane
-  compose.yaml
-  .env.example          # 显式目标版本
-  config/
-  nginx/
-  README.md
-k8s/                    # Kustomize 部署，自包含配置示例
-  kustomization.yaml    # 显式镜像版本
-  config/               # Headscale ConfigMap / Headplane Secret 来源
-  namespace.yaml
-  storage.yaml          # 两个持久卷申请
-  workloads.yaml
-  services.yaml
-  ingress.yaml
-  README.md
 ```
+
+从仓库根目录进入相应目录：
+
+```sh
+# 服务端，二选一
+cd server/docker
+# 或 cd server/k8s
+
+# 客户端，另一个终端从仓库根目录进入，二选一
+cd client/docker
+# 或 cd client/k8s
+```
+
+## 旧目录迁移
+
+旧 `docker/`、`k8s/` 已归入 `server/`，旧 `tailscale/` 已改为 `client/`。拉取更新后，将原目录中未跟踪的 `.env`、`config/headscale.yaml`、`config/headplane.yaml` 及自定义策略迁移到对应新目录，再从新目录运行命令；不要用示例覆盖真实配置。
+
+Compose 项目名及命名卷定义保持不变，迁移目录无需删除卷或重新注册。K8s 的资源名称和 namespace 保持不变。若曾用 `-p` 或 `COMPOSE_PROJECT_NAME` 自定义项目名，仍使用相同名称。
 
 ## 默认行为
 
