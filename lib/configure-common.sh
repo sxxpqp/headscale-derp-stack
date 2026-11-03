@@ -157,9 +157,15 @@ fi
 if [[ "$ROLE" == server && "$MODE" == k8s ]]; then
   check INGRESS_CLASS name_ok
   check TLS_SECRET name_ok
-  check TLS_IMPORT yn_ok
-  if [[ "$TLS_IMPORT" == y ]]; then
-    command -v kubectl >/dev/null || die 'TLS_IMPORT=y 需要 kubectl 进行本地 dry-run'
+  # 保留对旧 TLS_IMPORT 变量的读取兼容，但不再由它决定是否导入。
+  # 未提供本地证书时仅引用现有 Secret，不校验本地证书路径。
+  if [[ -z "$TLS_CERT" && -z "$TLS_KEY" ]]; then
+    TLS_IMPORT=n
+  elif [[ -z "$TLS_CERT" || -z "$TLS_KEY" ]]; then
+    die 'TLS_CERT 和 TLS_KEY 需同时填写；使用已有 Secret 时两项都可以不写'
+  else
+    TLS_IMPORT=y
+    command -v kubectl >/dev/null || die '本地证书生成 Secret 需要 kubectl 进行本地 dry-run'
     check TLS_CERT path_ok
     check TLS_KEY path_ok
     [[ -r "$TLS_CERT" && -r "$TLS_KEY" ]] || die 'TLS_CERT 或 TLS_KEY 文件不可读'

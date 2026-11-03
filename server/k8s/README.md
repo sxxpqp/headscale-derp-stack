@@ -12,6 +12,8 @@ bash configure.sh
 
 部署侧和方式已固定为 server/k8s，不用填写 ROLE 或 MODE。结果保存到仓库根目录的 `.generated/server-k8s/<INSTANCE>/`，检查后按脚本打印的命令部署。脚本不覆盖模板或已有配置，也不会自动部署。
 
+已有证书 Secret 时，只填写 `TLS_SECRET=你的Secret名称`；`TLS_CERT`、`TLS_KEY` 不写或留空即可。只有同时填写两项本地证书路径时才生成证书 Secret，无需额外开关。
+
 完整变量说明见 [配置生成说明](../../CONFIGURE.md)。也可以继续按下面的原生部署教程操作。
 
 **先看 [部署前配置清单](../CONFIGURATION.md)**，配置文件中也已标明必改项。

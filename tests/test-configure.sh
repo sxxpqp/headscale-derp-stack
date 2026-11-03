@@ -14,7 +14,8 @@ COOKIE=0123456789abcdef0123456789abcdef
 declare -A MODES=() ROLES=()
 
 settings() {
-  local label="$1" role="$2" mode="$3"
+  local label="$1" role="$2" mode="$3" tls_cert="" tls_key=""
+  if [[ "$mode" == docker ]]; then tls_cert="/etc/certs/full chain.pem"; tls_key="/etc/certs/privkey.pem"; fi
   MODES["$label"]="$mode"
   ROLES["$label"]="$role"
   cat > "$TEST_ROOT/$label.env" <<EOF
@@ -28,8 +29,8 @@ STORAGE_CLASS=fast-storage
 INGRESS_CLASS=nginx
 TLS_SECRET=existing-tls
 TLS_IMPORT=n
-TLS_CERT=/etc/certs/full chain.pem
-TLS_KEY=/etc/certs/privkey.pem
+TLS_CERT=$tls_cert
+TLS_KEY=$tls_key
 CLIENT_NAME=router-a
 AUTH_KEY=$KEY
 ROUTES=172.16.0.0/24
@@ -60,6 +61,8 @@ grep -Fq 'https://$host:8443$request_uri' "$SD/nginx/headscale.conf"
 grep -Fq 'ssl_certificate "/etc/certs/full chain.pem";' "$SD/nginx/headscale.conf"
 
 settings sk server k8s
+# 旧开关即使为 y，本地路径为空也必须正常引用已有 Secret。
+sed -i 's/^TLS_IMPORT=.*/TLS_IMPORT=y/' "$TEST_ROOT/sk.env"
 run sk
 SK="$PWD/.generated/server-k8s/$RUN-sk"
 rendered="$(kubectl kustomize "$SK")"
@@ -111,11 +114,24 @@ settings modeoverride client docker
 printf "MODE=k8s\n" >> "$TEST_ROOT/modeoverride.env"
 reject modeoverride
 
-# 本地 TLS Secret 生成，无集群操作。
+# 可以完全不写本地证书字段和旧开关。
+settings existing server k8s
+sed -i '/^TLS_CERT=/d; /^TLS_KEY=/d; /^TLS_IMPORT=/d' "$TEST_ROOT/existing.env"
+run existing
+existing_render="$(kubectl kustomize ".generated/server-k8s/$RUN-existing")"
+grep -q 'secretName: existing-tls' <<< "$existing_render"
+
+# 单独提供一项路径应在生成前拒绝。
+settings partial server k8s
+sed -i 's|^TLS_CERT=.*|TLS_CERT=/missing/fullchain.pem|' "$TEST_ROOT/partial.env"
+reject partial
+[[ ! -e ".generated/server-k8s/$RUN-partial" ]]
+
+# 本地 TLS Secret 生成，无集群操作；无需 TLS_IMPORT 开关。
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=vpn.test.example \
   -keyout "$TEST_ROOT/tls.key" -out "$TEST_ROOT/tls.crt" >/dev/null 2>&1
 settings tls server k8s
-sed -i 's/^TLS_IMPORT=.*/TLS_IMPORT=y/' "$TEST_ROOT/tls.env"
+sed -i '/^TLS_IMPORT=/d' "$TEST_ROOT/tls.env"
 sed -i "s|^TLS_CERT=.*|TLS_CERT=$TEST_ROOT/tls.crt|" "$TEST_ROOT/tls.env"
 sed -i "s|^TLS_KEY=.*|TLS_KEY=$TEST_ROOT/tls.key|" "$TEST_ROOT/tls.env"
 run tls

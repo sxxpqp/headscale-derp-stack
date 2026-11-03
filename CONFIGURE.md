@@ -4,7 +4,7 @@
 
 ## 使用
 
-Linux 上需要 Bash 4+、GNU sed、grep、cp 等常用工具；服务端 COOKIE_SECRET 留空时需要 openssl。只有 TLS_IMPORT=y 时，生成阶段需要 kubectl（仅本地 create secret --dry-run=client，不连接集群）。部署阶段再使用现有 Docker Compose 或 kubectl。
+Linux 上需要 Bash 4+、GNU sed、grep、cp 等常用工具；服务端 COOKIE_SECRET 留空时需要 openssl。只有同时填写 TLS_CERT 和 TLS_KEY 时，生成阶段需要 kubectl（仅本地 create secret --dry-run=client，不连接集群）。部署阶段再使用现有 Docker Compose 或 kubectl。
 
 脚本与变量模板都在对应部署目录中：
 
@@ -43,18 +43,18 @@ NODE=替换为kubectl_get_nodes查到的hostname
 INGRESS_CLASS=替换为已有IngressClass
 STORAGE_CLASS=
 TLS_SECRET=headscale-tls
-TLS_IMPORT=n
 COOKIE_SECRET=
 ```
 
-上面的中文必须换成实际值。COOKIE_SECRET 留空自动生成；使用已有部署的会话密钥时填写原值。TLS_IMPORT=n 时，headscale namespace 必须已有适用域名的 TLS Secret，或由现有 cert-manager 流程生成；不要因此覆盖 cert-manager 管理的 Secret。
+上面的中文必须换成实际值。COOKIE_SECRET 留空自动生成；使用已有部署的会话密钥时填写原值。本地 TLS_CERT、TLS_KEY 不写或都留空时，直接使用 TLS_SECRET 指定的已有证书。headscale namespace 必须已有适用域名的 TLS Secret，或由现有 cert-manager 流程生成；不要因此覆盖 cert-manager 管理的 Secret。
 
 需要由本地证书生成 Secret 配置时，改为：
 ```dotenv
-TLS_IMPORT=y
 TLS_CERT=/管理机实际路径/fullchain.pem
 TLS_KEY=/管理机实际路径/privkey.pem
 ```
+
+两项路径同时填写时才导入；只填写一项会报错，避免生成不完整的证书配置。旧 TLS_IMPORT 开关已弃用，现有变量文件保留它也会被忽略。
 
 脚本只把现有证书转换为本地 Secret YAML，加入生成目录的 kustomization.yaml；不会签发证书或访问集群。Headplane 配置 Secret 仍由 secretGenerator 自动生成。
 
@@ -71,7 +71,7 @@ TLS_CERT=/etc/letsencrypt/live/hb.sxxpqp.top/fullchain.pem
 TLS_KEY=/etc/letsencrypt/live/hb.sxxpqp.top/privkey.pem
 ```
 
-不使用 NODE、INGRESS_CLASS、StorageClass 或 TLS_IMPORT。生成 nginx/headscale.conf，需手动合并到已有 Nginx。证书路径属于 Nginx 宿主机，不会自动导入或复制证书。80 跳转和 HTTPS 监听会同步 PUBLIC_URL 的端口；公网端口映射场景可按实际拓扑再调整监听。
+不使用 NODE、INGRESS_CLASS 或 StorageClass。生成 nginx/headscale.conf，需手动合并到已有 Nginx。证书路径属于 Nginx 宿主机，不会自动导入或复制证书。80 跳转和 HTTPS 监听会同步 PUBLIC_URL 的端口；公网端口映射场景可按实际拓扑再调整监听。
 
 ### 例：客户端 K8s / Docker
 
