@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tailscale
+spec:
+  replicas: 1
+  # 单个节点身份只允许一个实例写状态。
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tailscale-client
+  template:
+    metadata:
+      labels:
+        app: tailscale-client
+    spec:
+      # Linux 节点网关模式，影响选定节点的路由表。
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        kubernetes.io/hostname: REPLACE_WITH_ROUTER_NODE
+      containers:
+        - name: tailscale
+          image: tailscale/tailscale:v1.104.5
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+            capabilities:
+              add: [NET_ADMIN]
+          env:
+            - name: TS_HOSTNAME
+              value: k8s-router
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: authkey
+            - name: TS_AUTH_ONCE
+              value: "true"
+            - name: TS_USERSPACE
+              value: "false"
+            - name: TS_ACCEPT_DNS
+              value: "false"
+            # 不通过 Kubernetes API 保存状态，无需 ServiceAccount / RBAC。
+            - name: TS_KUBE_SECRET
+              value: ""
+            - name: TS_STATE_DIR
+              value: /var/lib/tailscale
+            # 必改：只发布该节点可达的实际网段。
+            - name: TS_ROUTES
+              value: 172.16.0.0/24
+            - name: TS_EXTRA_ARGS
+              value: --login-server=https://hb.sxxpqp.top --accept-routes --advertise-exit-node
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: [tailscale, ip, "-4"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/tailscale
+            - name: tun
+              mountPath: /dev/net/tun
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: tailscale-state
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice

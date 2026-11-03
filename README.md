@@ -2,6 +2,10 @@
 
 自建 Headscale 控制平面、DERP/STUN 中继及 Headplane Web 管理界面，提供两种独立部署方式。
 
+组件分为 **Headscale 控制服务（含内置 DERP/STUN）**、**Headplane 管理界面**、**Tailscale 客户端**。前两者一起部署，客户端独立部署到各网关节点。
+
+客户端 Docker / Kubernetes 配置和操作步骤见 [tailscale/README.md](tailscale/README.md)。
+
 **开始前先看：[部署前配置清单](CONFIGURATION.md)**，集中列出了所有必改字段及对应文件。
 
 ## 选择部署方式
@@ -14,7 +18,11 @@
 ## 目录
 
 ```text
-docker/                 # Compose 部署，自包含配置示例
+tailscale/              # 独立客户端，与服务端分开启动
+  docker/               # Linux host 网络网关
+  k8s/                  # 单节点 hostNetwork 网关 Pod
+  README.md
+docker/                 # 服务端 Compose：Headscale + Headplane
   compose.yaml
   .env.example          # 显式目标版本
   config/

@@ -1,0 +1,25 @@
+name: tailscale-client
+services:
+  tailscale:
+    image: tailscale/tailscale:${TAILSCALE_VERSION:-v1.104.5}
+    restart: unless-stopped
+    # Linux 网关模式：路由和 tailscale0 位于宿主机网络命名空间。
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      TS_HOSTNAME: ${TS_HOSTNAME:-linux-router}
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_AUTH_ONCE: "true"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      # 不改写宿主机 DNS，避免网关引入解析依赖。
+      TS_ACCEPT_DNS: "false"
+      TS_ROUTES: ${TS_ROUTES:-}
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:?请先复制并编辑 .env}
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+volumes:
+  tailscale-state:
