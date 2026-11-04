@@ -2,13 +2,13 @@
 
 本目录只部署 Tailscale，连接已部署的 Headscale；Headplane 仍在[服务端](../server/README.md)的 Docker / K8s 清单中。DERP/STUN 使用 Headscale 内置功能，不是第四个独立容器。
 
-提供 Linux 宿主机 / K8s 节点网关模式：发布内网路由、接受其他路由，并可提供出口节点。Docker 使用 host 网络，Pod 使用 hostNetwork；Tailscale 将管理所选宿主机的路由和防火墙。每台主机只运行一个 tailscaled，不要与已有原生客户端、另一个容器或 Pod 同时运行。各网关分别部署，状态卷不能复制给另一台网关。
+提供 Linux 宿主机 / K8s 节点网关模式：发布内网路由、接受其他路由，并可提供出口节点。Docker 使用 host 网络，K8s 使用独立 Pod 网络；后者通过特权 initContainer 开启 Pod 内 IPv4 转发，主容器使用 nftables。每台主机只运行一个 tailscaled，不要与已有原生客户端、另一个容器或 Pod 同时运行。各网关分别部署，状态卷不能复制给另一台网关。
 
-固定镜像 tailscale/tailscale:v1.104.5；实际兼容性及转发须在目标环境验收。
+K8s 使用已验证的 tailscale/tailscale:v1.104，Docker 保留 v1.104.5；实际兼容性及转发须在目标环境验收。
 
-## 1. 宿主机准备（两种方式均需）
+## 1. 网络准备
 
-在运行客户端的 Linux 主机上执行；K8s 则在选定的路由节点上执行。确认该主机能访问要发布的网段，存在 /dev/net/tun，必要时先加载 tun 模块。
+两种方式都需要 /dev/net/tun，并确认实际运行环境能访问要发布的网段，必要时先加载 tun 模块。以下宿主机 sysctl 步骤用于 Docker host 网络；K8s 基础模板由 initContainer 配置 Pod 网络命名空间的转发。
 
 ```sh
 sudo tee /etc/sysctl.d/99-tailscale.conf >/dev/null <<'EOF'
@@ -62,12 +62,12 @@ docker compose exec tailscale tailscale status
 
 ## 4. Kubernetes Pod
 
-本模板是手动管理的单副本 Deployment，不依赖 Tailscale Operator。要求 Linux 节点、可用 PVC、可访问 /dev/net/tun，以及集群准入允许 hostNetwork、hostPath、root 和 NET_ADMIN。无需 privileged、Docker socket 或 Kubernetes API 权限。
+本模板是手动管理的单副本 Deployment，不依赖 Tailscale Operator。要求 Linux 节点、可用 PVC、可访问 /dev/net/tun，以及集群准入允许 hostPath、privileged、root 和 NET_ADMIN。基础模板不使用 hostNetwork，也无需 Docker socket 或 Kubernetes API 权限。
 
 从仓库根目录执行：
 ```sh
 cd client/k8s
-# 修改 deployment.yaml：节点 hostname、节点名、控制域名、路由。
+# 修改 deployment.yaml：节点名、控制域名、Pod 可达的路由。
 # 无默认 StorageClass 时修改 storage.yaml。
 nano deployment.yaml
 kubectl apply -f namespace.yaml
@@ -84,7 +84,9 @@ kubectl -n tailscale-client logs deployment/tailscale --tail=100
 kubectl -n tailscale-client exec deployment/tailscale -- tailscale status
 ```
 
-命令中的 read 使用 Bash。Secret 已存在时通过现有 Secret 管理流程更新。状态存 PVC，TS_KUBE_SECRET 为空，禁止挂载 ServiceAccount token。固定节点必须能挂载该卷，副本数保持 1；备份节点身份时不要泄露卷内私钥。readiness 仅检查已分配 IPv4，不能证明子网转发可用。
+命令中的 read 使用 Bash。Secret 已存在时通过现有 Secret 管理流程更新。状态存 PVC，TS_KUBE_SECRET 为空，禁止挂载 ServiceAccount token。调度到的节点必须能挂载该卷并访问所发布的网段，副本数保持 1；备份节点身份时不要泄露卷内私钥。readiness 仅检查已分配 IPv4，不能证明子网转发可用。
+
+基础 K8s 模板采用你确认的配置：`--login-server=https://hs.wishfoxs.com:5443`，公告 `192.168.150.0/24,10.96.0.0/12,172.16.0.0/16`，不默认接受其他路由或发布出口。部署到其他环境时替换为实际地址和网段。
 
 ## 5. 批准路由与验收
 

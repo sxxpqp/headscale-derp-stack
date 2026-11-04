@@ -70,7 +70,7 @@ load_settings() {
     [[ "$line" == *=* ]] || die "变量文件第 $line_no 行不是 KEY=value"
     key="${line%%=*}"; value="${line#*=}"
     case "$key" in
-      INSTANCE|PUBLIC_URL|PUBLIC_IPV4|MAGIC_DOMAIN|COOKIE_SECRET|NODE|STORAGE_CLASS|INGRESS_CLASS|TLS_SECRET|TLS_IMPORT|TLS_CERT|TLS_KEY|CLIENT_NAME|AUTH_KEY|ROUTES|ACCEPT_ROUTES|EXIT_NODE) ;;
+      INSTANCE|ADMIN_URL|PUBLIC_URL|PUBLIC_IPV4|MAGIC_DOMAIN|COOKIE_SECRET|NODE|STORAGE_CLASS|INGRESS_CLASS|TLS_SECRET|TLS_IMPORT|TLS_CERT|TLS_KEY|CLIENT_NAME|AUTH_KEY|ROUTES|ACCEPT_ROUTES|EXIT_NODE) ;;
       *) die "变量文件第 $line_no 行存在不支持的变量名" ;;
     esac
     [[ -z "${seen[$key]:-}" ]] || die "变量重复：$key"
@@ -159,10 +159,12 @@ fi
 (( BASH_VERSINFO[0] >= 4 )) || die '需要 Bash 4 或更新版本'
 INSTANCE=default
 PUBLIC_URL=https://hb.sxxpqp.top
+ADMIN_URL=''
 PUBLIC_IPV4=''; MAGIC_DOMAIN=ts.corp.internal; COOKIE_SECRET=''
 NODE=''; STORAGE_CLASS=''; INGRESS_CLASS=''
 TLS_SECRET=headscale-tls; TLS_IMPORT=n; TLS_CERT=''; TLS_KEY=''
 CLIENT_NAME=site-a-router; AUTH_KEY=''; ROUTES=''; ACCEPT_ROUTES=y; EXIT_NODE=n
+if [[ "$MODE" == k8s ]]; then ACCEPT_ROUTES=n; fi
 
 load_settings "${1:-$CONFIG_DIR/setup.env}"
 check ROLE role_ok
@@ -176,6 +178,11 @@ HOST="${PUBLIC_URL#https://}"; PORT=443
 if [[ "$HOST" == *:* ]]; then PORT="${HOST##*:}"; HOST="${HOST%:*}"; fi
 
 if [[ "$ROLE" == server ]]; then
+  check ADMIN_URL url_ok
+  ADMIN_URL="${ADMIN_URL%/}"
+  ADMIN_HOST="${ADMIN_URL#https://}"; ADMIN_PORT=443
+  if [[ "$ADMIN_HOST" == *:* ]]; then ADMIN_PORT="${ADMIN_HOST##*:}"; ADMIN_HOST="${ADMIN_HOST%:*}"; fi
+  [[ "$ADMIN_HOST" != "$HOST" ]] || die 'ADMIN_URL 必须使用独立于 PUBLIC_URL 的域名'
   check PUBLIC_IPV4 ipv4_ok
   check MAGIC_DOMAIN domain_ok
   [[ "$HOST" != "$MAGIC_DOMAIN" && "$HOST" != *."$MAGIC_DOMAIN" ]] ||
@@ -191,7 +198,7 @@ if [[ "$ROLE" == server ]]; then
   unset COOKIE_SECRET
 fi
 if [[ "$MODE" == k8s ]]; then
-  check NODE name_ok
+  if [[ "$ROLE" == server ]]; then check NODE name_ok; fi
   check STORAGE_CLASS optional_name
 fi
 if [[ "$ROLE" == server && "$MODE" == k8s ]]; then
@@ -223,8 +230,8 @@ if [[ "$ROLE" == client ]]; then
   check ROUTES routes_ok
   check ACCEPT_ROUTES yn_ok
   check EXIT_NODE yn_ok
-  EXTRA_ARGS="--login-server=$PUBLIC_URL --accept-routes="
-  if [[ "$ACCEPT_ROUTES" == y ]]; then EXTRA_ARGS+=true; else EXTRA_ARGS+=false; fi
+  EXTRA_ARGS="--login-server=$PUBLIC_URL"
+  if [[ "$ACCEPT_ROUTES" == y ]]; then EXTRA_ARGS+=' --accept-routes'; fi
   if [[ "$EXIT_NODE" == y ]]; then EXTRA_ARGS+=' --advertise-exit-node'; fi
 fi
 printf '变量校验通过，生成配置：%s/%s\n' "$ROLE" "$MODE"
@@ -242,7 +249,7 @@ if [[ "$ROLE" == server ]]; then
   yaml_set "$OUT/config/headscale.yaml" server_url "\"$PUBLIC_URL\""
   yaml_set "$OUT/config/headscale.yaml" derp.server.ipv4 "\"$PUBLIC_IPV4\""
   yaml_set "$OUT/config/headscale.yaml" dns.base_domain "\"$MAGIC_DOMAIN\""
-  yaml_set "$OUT/config/headplane.yaml" server.base_url "\"$PUBLIC_URL\""
+  yaml_set "$OUT/config/headplane.yaml" server.base_url "\"$ADMIN_URL\""
   yaml_set "$OUT/config/headplane.yaml" headscale.public_url "\"$PUBLIC_URL\""
   yaml_set "$OUT/config/headplane.yaml" server.cookie_secret "\"$COOKIE\""
   unset COOKIE
@@ -253,6 +260,8 @@ if [[ "$ROLE" == server ]]; then
     kubectl patch --local -f "$OUT/ingress.yaml" --type=json -p "[
       {\"op\":\"replace\",\"path\":\"/spec/ingressClassName\",\"value\":\"$INGRESS_CLASS\"},
       {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"$HOST\"},
+      {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/1\",\"value\":\"$ADMIN_HOST\"},
+      {\"op\":\"replace\",\"path\":\"/spec/rules/1/host\",\"value\":\"$ADMIN_HOST\"},
       {\"op\":\"replace\",\"path\":\"/spec/tls/0/secretName\",\"value\":\"$TLS_SECRET\"},
       {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"$HOST\"}
     ]" -o yaml > "$OUT/ingress.updated.yaml"
@@ -268,21 +277,28 @@ if [[ "$ROLE" == server ]]; then
     copy_file .env.example .env
     copy_file nginx/headscale.conf.example nginx/headscale.conf
     replace "$OUT/nginx/headscale.conf" 'vpn\.example\.com' "$HOST"
-    replace "$OUT/nginx/headscale.conf" 'listen 443 ssl;' "listen $PORT ssl;"
+    replace "$OUT/nginx/headscale.conf" 'admin\.example\.com' "$ADMIN_HOST"
+    # 两个 server 块分别使用各自 URL 的 HTTPS 端口和跳转地址。
+    awk -v control="$PORT" -v admin="$ADMIN_PORT" '
+      /listen 443 ssl;/ { count++; sub(/443/, count == 1 ? control : admin) }
+      { print }
+    ' "$OUT/nginx/headscale.conf" > "$OUT/nginx/headscale.updated.conf"
+    mv -- "$OUT/nginx/headscale.updated.conf" "$OUT/nginx/headscale.conf"
     replace "$OUT/nginx/headscale.conf" 'ssl_certificate .*;' "ssl_certificate \"$TLS_CERT\";"
     replace "$OUT/nginx/headscale.conf" 'ssl_certificate_key .*;' "ssl_certificate_key \"$TLS_KEY\";"
-    if [[ "$PORT" != 443 ]]; then
-      # Nginx 变量必须保持字面值，不能由 shell 展开。
-      # shellcheck disable=SC2016
-      replace "$OUT/nginx/headscale.conf" 'https://\$host\$request_uri' "https://\$host:$PORT\$request_uri"
-    fi
+    # server_name 在跳转之前出现；每个域名使用自己的公网端口。
+    awk -v control="$PUBLIC_URL" -v admin="$ADMIN_URL" -v host="$HOST" '
+      /server_name/ { url = index($0, host ";") ? control : admin }
+      /return 301/ { sub(/https:\/\/\$host/, url) }
+      { print }
+    ' "$OUT/nginx/headscale.conf" > "$OUT/nginx/headscale.updated.conf"
+    mv -- "$OUT/nginx/headscale.updated.conf" "$OUT/nginx/headscale.conf"
   fi
 else
   if [[ "$MODE" == k8s ]]; then
     for file in namespace.yaml storage.yaml deployment.yaml kustomization.yaml; do copy_file "$file"; done
-    replace "$OUT/deployment.yaml" REPLACE_WITH_ROUTER_NODE "$NODE"
-    replace "$OUT/deployment.yaml" 'value: k8s-router' "value: $CLIENT_NAME"
-    replace "$OUT/deployment.yaml" 'value: 172\.16\.0\.0/24' "value: \"$ROUTES\""
+    replace "$OUT/deployment.yaml" 'value: site-a-router' "value: $CLIENT_NAME"
+    replace "$OUT/deployment.yaml" 'value: "192\.168\.150\.0/24,10\.96\.0\.0/12,172\.16\.0\.0/16"' "value: \"$ROUTES\""
     replace "$OUT/deployment.yaml" 'value: --login-server=.*' "value: $EXTRA_ARGS"
     mkdir -p -- "$OUT/config"
     printf '%s' "$AUTH_KEY" > "$OUT/config/authkey"
@@ -332,7 +348,7 @@ else
   if [[ "$ROLE" == server ]]; then printf '手动合并 nginx/headscale.conf，按既有流程准备证书。\n'; fi
 fi
 if [[ "$ROLE" == client ]]; then
-  printf '启动前按 client/README.md 开启宿主机转发，注册后在 Headscale 批准路由。\n'
+  printf 'Docker 启动前开启宿主机转发；K8s 由 initContainer 开启 Pod 转发。注册后在 Headscale 批准路由。\n'
 fi
 
 

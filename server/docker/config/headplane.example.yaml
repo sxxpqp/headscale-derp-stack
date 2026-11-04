@@ -3,7 +3,7 @@ server:
   host: "0.0.0.0"
   port: 3000
   # 【必改】管理界面公网基础地址，不包含 /admin。
-  base_url: "https://vpn.example.com"
+  base_url: "https://admin.example.com"
   # 【必改】用 openssl rand -hex 16 生成随机 32 字符值，勿提交真实密钥。
   cookie_secret: "REPLACE_WITH_32_CHAR_RANDOM_VALUE"
   # 【通常不用改】公网 HTTPS 保持 true。

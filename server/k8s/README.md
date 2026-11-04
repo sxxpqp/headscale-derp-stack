@@ -23,7 +23,7 @@ bash configure.sh
 ## 1. 网络与存储前提
 
 - 控制平面及 DERP：公网 HTTPS 443 → 已有 Ingress → Headscale Service 8080。
-- 管理界面：同域名 `/admin` → Headplane Service 3000，不重写路径。
+- 管理界面：独立管理域名的 `/admin` → Headplane Service 3000，不重写路径。
 - STUN：公网 UDP 3478 → 指定 IDC 节点的 hostPort 3478 → Headscale Pod。需要 CNI 支持 hostPort、节点端口空闲并放行防火墙；如有 NAT，映射到该节点相同端口。
 - Ingress 公网入口和 STUN 节点应使用同一公网 IPv4（配置中的 `derp.server.ipv4`）；本模板要求该拓扑。不同入口 IP 需要单独设计 DERP map，不能直接套用。
 - 两个 1Gi ReadWriteOnce PVC，使用集群默认 StorageClass；无默认项时在 `storage.yaml` 指定已有的 `storageClassName`。固定节点应能挂载 Headscale 卷。
@@ -79,13 +79,13 @@ nano storage.yaml
 | config/headscale.yaml | server_url | `https://hb.sxxpqp.top`，替换为真实域名 |
 | 同上 | derp.server.ipv4 | 真实公网 IPv4，替换 `203.0.113.10` |
 | 同上 | dns.base_domain | 如 `ts.corp.internal`，与控制域名不同，不用 .local |
-| config/headplane.yaml | server.base_url、headscale.public_url | 与 server_url 相同，不带 /admin |
+| config/headplane.yaml | server.base_url、headscale.public_url | server.base_url 使用独立管理地址；headscale.public_url 与 server_url 相同，均不带 /admin |
 | 同上 | headscale.url | 保持 `http://headscale:8080`，这是集群内地址 |
 | 同上 | server.cookie_secret | 上一步已生成，不保留示例占位符 |
 | 同上 | integration.kubernetes | 保留 enabled: false 及 pod_name: "headscale" |
 | workloads.yaml | REPLACE_WITH_IDC_NODE | `kubectl get nodes` 查到的实际 hostname |
 | ingress.yaml | REPLACE_WITH_INGRESS_CLASS | `kubectl get ingressclass` 查到的实际 class |
-| ingress.yaml | rules.host、tls.hosts | 与控制域名一致 |
+| ingress.yaml | rules.host、tls.hosts | 分别填写控制域名和独立管理域名，TLS 证书覆盖二者 |
 | storage.yaml | storageClassName | 没有默认 StorageClass 时，两个 PVC 都指定可用项 |
 
 公网使用非 443 端口时，两个公网 URL 都加端口，例如 `https://hb.sxxpqp.top:8443`；Ingress 的 host 字段只填域名，监听端口 / 外部映射在现有 Ingress Controller 上配置，不改内部 Service 8080/3000。
@@ -146,7 +146,7 @@ Secret 类型应为 `kubernetes.io/tls`，包含 `tls.crt` 和 `tls.key`。descr
 
 ## 3. 核对 Ingress 协议支持
 
-`ingress.yaml` 是标准路由模板，未假定控制器类型。必须按现有控制器文档开启长连接、关闭响应缓冲，并保留 Upgrade/Connection；特别是 POST 方法携带 `Upgrade: tailscale-control-protocol`，以及 DERP Upgrade。不能仅凭普通网页可访问判断兼容。Envoy/Istio 等还需显式允许自定义升级类型。
+`ingress.yaml` 使用标准路由，并预置 Nginx 的 3600 秒长连接超时注解；使用其他控制器时按需替换注解。必须按现有控制器文档开启长连接、关闭响应缓冲，并保留 Upgrade/Connection；特别是 POST 方法携带 `Upgrade: tailscale-control-protocol`，以及 DERP Upgrade。不能仅凭普通网页可访问判断兼容。Envoy/Istio 等还需显式允许自定义升级类型。
 
 普通 Ingress 不处理 UDP，STUN 由上面的 hostPort 暴露。不要在整个控制域名前添加 Basic Auth。Headscale `trusted_proxies` 留空时忽略来源头；只有确认代理实际来源 CIDR 后才添加精确范围。
 
@@ -221,7 +221,7 @@ kubectl -n headscale exec deployment/headscale -- headscale apikeys create
 curl -v https://你的域名/health
 ```
 
-使用上面生成的 API Key 登录 `https://你的域名/admin/`。在 **Settings → Pre-Auth Keys → Create pre-auth key** 创建客户端预认证密钥；持久网关关闭 Ephemeral，按需选择 Reusable。API Key 用于管理登录，预认证密钥供客户端 TS_AUTHKEY 使用，不能混用。当前 API Key 登录模式不必把 API Key 预先写入服务端 Secret。客户端执行 `tailscale up --login-server=https://你的域名`，按输出注册链接注册。默认 `config/policy.hujson` 允许所有已注册节点相互访问所有端口；需要隔离时先收紧 ACL，再验证：
+使用上面生成的 API Key 登录 `https://你的管理域名/admin/`。在 **Settings → Pre-Auth Keys → Create pre-auth key** 创建客户端预认证密钥；持久网关关闭 Ephemeral，按需选择 Reusable。API Key 用于管理登录，预认证密钥供客户端 TS_AUTHKEY 使用，不能混用。当前 API Key 登录模式不必把 API Key 预先写入服务端 Secret。客户端执行 `tailscale up --login-server=https://你的域名`，按输出注册链接注册。默认 `config/policy.hujson` 允许所有已注册节点相互访问所有端口；需要隔离时先收紧 ACL，再验证：
 
 ```sh
 tailscale netcheck

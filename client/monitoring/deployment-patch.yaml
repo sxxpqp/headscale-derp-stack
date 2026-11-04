@@ -5,6 +5,11 @@ metadata:
 spec:
   template:
     spec:
+      # 可选主机日志方案依赖宿主机 tailscale0；显式覆盖基础 Pod 网络模式。
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kubernetes.io/hostname: REPLACE_WITH_ROUTER_NODE
       containers:
         - name: tailscale
           env:

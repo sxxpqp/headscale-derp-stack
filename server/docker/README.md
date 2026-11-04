@@ -72,7 +72,7 @@ docker compose exec headscale users create admin
 docker compose exec headscale apikeys create
 ```
 
-访问 `https://你的域名/admin`，使用 API Key 登录。默认仅启用 API 管理，不挂载 Docker socket，不允许界面修改 Headscale 文件配置。需要 SSO 时另行配置 OIDC 和服务端 API Key。
+访问 `https://你的管理域名/admin`，使用 API Key 登录。默认仅启用 API 管理，不挂载 Docker socket，不允许界面修改 Headscale 文件配置。需要 SSO 时另行配置 OIDC 和服务端 API Key。
 
 客户端执行 `tailscale up --login-server=https://你的域名`，按显示的注册链接操作。默认 `config/policy.hujson` 允许所有已注册节点相互访问所有端口；需要隔离时按实际用户、节点及端口收紧。
 

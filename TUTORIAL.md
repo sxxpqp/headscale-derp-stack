@@ -8,7 +8,8 @@
 
 | 内容 | 本教程示例 | 需要做的事 |
 | --- | --- | --- |
-| 控制与管理域名 | `hb.sxxpqp.top` | 换成你实际拥有且已解析到服务器的域名 |
+| 控制域名 | `hb.sxxpqp.top` | 换成你实际拥有且已解析到服务器的域名 |
+| 独立管理域名 | `admin.sxxpqp.top` | 解析到同一入口，证书同时覆盖两个域名 |
 | 服务端公网 IPv4 | `你的真实公网IPv4` | 填真实 IP，不能写文字占位符或内网 IP |
 | MagicDNS 基域 | `ts.corp.internal` | 可保留；与控制域名不同，不使用 .local |
 | 客户端节点名 | `site-a-router` | 每台网关使用不同名称 |
@@ -60,7 +61,7 @@ nano config/headplane.yaml
 修改已有字段：
 ```yaml
 server:
-  base_url: "https://hb.sxxpqp.top"
+  base_url: "https://admin.sxxpqp.top"
   cookie_secret: "替换为刚才生成的32字符随机值"
 
 headscale:
@@ -104,7 +105,7 @@ docker compose logs --since=2m --tail=100 headscale headplane
 ```
 
 Nginx 参考 [反代模板](server/docker/nginx/headscale.conf.example)。将模板内容合并到现有 Nginx 的 http 配置中，替换：
-- 所有 `vpn.example.com` → 实际域名，例如 `hb.sxxpqp.top`。
+- `vpn.example.com` → 控制域名；`admin.example.com` → 独立管理域名。
 - `ssl_certificate` → 已有该域名的完整证书链路径。
 - `ssl_certificate_key` → 对应私钥路径。
 
@@ -115,7 +116,7 @@ sudo nginx -t && sudo systemctl reload nginx
 curl -fsS https://hb.sxxpqp.top/health
 ```
 
-将 curl 的域名换成实际域名。管理页面访问 `https://hb.sxxpqp.top/admin/`，不是根路径 /。
+将 curl 的域名换成实际域名。管理页面访问 `https://admin.sxxpqp.top/admin/`，不是根路径 /。
 
 ## 4. 登录 Headplane 并创建客户端密钥
 
@@ -240,7 +241,7 @@ docker compose exec tailscale tailscale set --advertise-routes=172.16.0.0/24 --a
 | 服务端 | server/k8s/ingress.yaml | rules.host、tls.hosts、IngressClass |
 | 服务端 | server/k8s/workloads.yaml | REPLACE_WITH_IDC_NODE |
 | 服务端 | server/k8s/storage.yaml | 按集群调整 StorageClass |
-| 客户端 | client/k8s/deployment.yaml | 节点 hostname、TS_HOSTNAME、TS_ROUTES、TS_EXTRA_ARGS |
+| 客户端 | client/k8s/deployment.yaml | TS_HOSTNAME、TS_ROUTES、TS_EXTRA_ARGS；使用 Pod 网络 |
 | 客户端 | tailscale-client namespace 的 tailscale-auth Secret | 将 Headplane 生成的 Pre-Auth Key 写入 authkey |
 | 客户端 | client/k8s/storage.yaml | 按集群调整 StorageClass |
 
