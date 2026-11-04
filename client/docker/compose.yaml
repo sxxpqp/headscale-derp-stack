@@ -1,7 +1,7 @@
 name: tailscale-client
 services:
   tailscale:
-    image: tailscale/tailscale:${TAILSCALE_VERSION:-v1.104.5}
+    image: tailscale/tailscale:${TAILSCALE_VERSION:-v1.104}
     restart: unless-stopped
     # Linux 网关模式：路由和 tailscale0 位于宿主机网络命名空间。
     network_mode: host
