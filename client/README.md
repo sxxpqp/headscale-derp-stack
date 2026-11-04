@@ -4,7 +4,7 @@
 
 提供 Linux 宿主机 / K8s 节点网关模式：发布内网路由、接受其他路由，并可提供出口节点。Docker 使用 host 网络，K8s 使用独立 Pod 网络；后者通过特权 initContainer 开启 Pod 内 IPv4 转发，主容器使用 nftables。每台主机只运行一个 tailscaled，不要与已有原生客户端、另一个容器或 Pod 同时运行。各网关分别部署，状态卷不能复制给另一台网关。
 
-K8s 使用已验证的 tailscale/tailscale:v1.104，Docker 保留 v1.104.5；实际兼容性及转发须在目标环境验收。
+Docker / K8s 均使用 tailscale/tailscale:v1.104；实际兼容性及转发须在目标环境验收。
 
 ## 1. 网络准备
 
@@ -118,4 +118,4 @@ docker compose exec tailscale tailscale set --advertise-routes=172.16.0.0/24 --a
 - [容器参数及状态持久化](https://tailscale.com/docs/features/containers/docker/docker-params)
 - [子网路由](https://tailscale.com/docs/features/subnet-routers)
 - [Headscale 路由审批](https://headscale.net/stable/ref/routes/)
-- [固定版本](https://github.com/tailscale/tailscale/releases/tag/v1.104.5)
+- [镜像标签](https://hub.docker.com/r/tailscale/tailscale/tags?name=v1.104)

@@ -146,7 +146,7 @@ nano .env
 
 把 .env 中对应字段替换为：
 ```dotenv
-TAILSCALE_VERSION=v1.104.5
+TAILSCALE_VERSION=v1.104
 TS_HOSTNAME=site-a-router
 TS_AUTHKEY=替换为Headplane生成的PreAuthKey
 TS_ROUTES=172.16.0.0/24
