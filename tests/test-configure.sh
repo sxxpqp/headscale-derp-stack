@@ -21,6 +21,7 @@ settings() {
   cat > "$TEST_ROOT/$label.env" <<EOF
 INSTANCE=$RUN-$label
 PUBLIC_URL=https://vpn.test.example:8443
+ADMIN_URL=https://admin.test.example:9443
 PUBLIC_IPV4=8.8.8.8
 MAGIC_DOMAIN=ts.corp.internal
 COOKIE_SECRET=$COOKIE
@@ -58,7 +59,7 @@ SD="$PWD/.generated/server-docker/$RUN-sd"
 docker compose -f "$SD/compose.yaml" config --quiet
 grep -q 'listen 8443 ssl;' "$SD/nginx/headscale.conf"
 # shellcheck disable=SC2016
-grep -Fq 'https://$host:8443$request_uri' "$SD/nginx/headscale.conf"
+grep -Fq 'https://vpn.test.example:8443$request_uri' "$SD/nginx/headscale.conf"
 grep -Fq 'ssl_certificate "/etc/certs/full chain.pem";' "$SD/nginx/headscale.conf"
 
 settings sk server k8s
@@ -72,6 +73,13 @@ grep -q 'secretName: existing-tls' <<< "$rendered"
 grep -q 'storageClassName: fast-storage' <<< "$rendered"
 if grep -q 'host: vpn.test.example:8443' <<< "$rendered"; then exit 1; fi
 
+grep -q 'host: admin.test.example' <<< "$rendered"
+grep -q 'base_url: "https://admin.test.example:9443"' "$SK/config/headplane.yaml"
+grep -q 'public_url: "https://vpn.test.example:8443"' "$SK/config/headplane.yaml"
+grep -q 'listen 9443 ssl;' "$SD/nginx/headscale.conf"
+# shellcheck disable=SC2016
+grep -Fq 'https://admin.test.example:9443$request_uri' "$SD/nginx/headscale.conf"
+
 settings cd client docker
 run cd
 CD="$PWD/.generated/client-docker/$RUN-cd"
@@ -79,11 +87,24 @@ docker compose -f "$CD/compose.yaml" config --quiet
 
 settings ck client k8s
 sed -i 's/^ROUTES=.*/ROUTES=/' "$TEST_ROOT/ck.env"
+sed -i '/^NODE=/d; s/^ACCEPT_ROUTES=.*/ACCEPT_ROUTES=n/' "$TEST_ROOT/ck.env"
 run ck
 CK="$PWD/.generated/client-k8s/$RUN-ck"
 rendered="$(kubectl kustomize "$CK")"
 grep -q 'name: tailscale-auth-' <<< "$rendered"
 if grep -q -- '--advertise-exit-node' "$CK/deployment.yaml"; then exit 1; fi
+
+if grep -q 'hostNetwork:' "$CK/deployment.yaml"; then exit 1; fi
+grep -q 'sysctl -w net.ipv4.ip_forward=1' "$CK/deployment.yaml"
+grep -q 'value: nftables' "$CK/deployment.yaml"
+if grep -q -- '--accept-routes' "$CK/deployment.yaml"; then exit 1; fi
+
+settings samehost server k8s
+sed -i 's|^ADMIN_URL=.*|ADMIN_URL=https://vpn.test.example:9443|' "$TEST_ROOT/samehost.env"
+reject samehost
+settings missingadmin server k8s
+sed -i '/^ADMIN_URL=/d' "$TEST_ROOT/missingadmin.env"
+reject missingadmin
 
 # 同名目录拒绝覆盖。
 before="$(cksum "$SD/config/headplane.yaml")"

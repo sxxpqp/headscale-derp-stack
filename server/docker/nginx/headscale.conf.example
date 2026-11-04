@@ -1,4 +1,4 @@
-# 【必改】所有 vpn.example.com 替换为实际控制域名。
+# 【必改】vpn.example.com 和 admin.example.com 分别替换为控制和管理域名。
 # 【必改】ssl_certificate / ssl_certificate_key 改为已有有效证书路径。
 # 【通常不用改】宿主机 Nginx 使用 127.0.0.1 上游；容器 Nginx 见 README。
 # Include inside the existing nginx http {} block.
@@ -31,7 +31,19 @@ server {
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
     }
-    location /admin {
+}
+server {
+    listen 80;
+    server_name admin.example.com;
+    location / { return 301 https://$host$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name admin.example.com;
+    # 此证书需同时覆盖两个域名。
+    ssl_certificate /etc/letsencrypt/live/vpn.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vpn.example.com/privkey.pem;
+    location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

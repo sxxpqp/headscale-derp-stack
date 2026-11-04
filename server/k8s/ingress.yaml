@@ -2,26 +2,23 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: headscale
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
   # 【必改】填写 kubectl get ingressclass 查到的现有控制器 class。
   ingressClassName: REPLACE_WITH_INGRESS_CLASS
-  # 【必改】tls.hosts 和 rules.host 都替换为实际控制域名。
+  # 【必改】tls.hosts 和 rules.host 分别填写控制域名和独立管理域名。
   tls:
     - hosts:
         - vpn.example.com
+        - admin.example.com
       # 【必备】同 namespace 内须有此 TLS Secret；改名时同步创建命令。
       secretName: headscale-tls
   rules:
     - host: vpn.example.com
       http:
         paths:
-          - path: /admin
-            pathType: Prefix
-            backend:
-              service:
-                name: headplane
-                port:
-                  number: 3000
           - path: /
             pathType: Prefix
             backend:
@@ -29,3 +26,13 @@ spec:
                 name: headscale
                 port:
                   number: 8080
+    - host: admin.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: headplane
+                port:
+                  number: 3000

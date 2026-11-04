@@ -24,13 +24,13 @@ kubectl -n monitoring get prometheus YOUR_PROMETHEUS -o yaml
 
 核对 spec.podMonitorSelector、spec.podMonitorNamespaceSelector；不要为了接入而直接覆盖现网 Prometheus 配置。只把本 PodMonitor 的 labels/namespace 调整到现网允许的选择范围。若 PodMonitor 必须在 monitoring namespace，可单独 apply 修改 namespace 后的 PodMonitor，并从本 overlay resources 中移除它，避免 namespace transformer 再覆盖。
 
-客户端沿用 hostNetwork，status.hostIP 必须是 Prometheus 可达的受保护内网 IP。9002 是无认证指标端口，只允许监控来源访问；hostNetwork 下不能只依赖普通 Pod NetworkPolicy。确认节点 9002、127.0.0.1:12346 未被其他进程占用。
+此可选日志 overlay 显式启用 hostNetwork（基础客户端使用 Pod 网络）；部署前需按客户端 Docker 准备步骤在所选宿主机开启转发。status.hostIP 必须是 Prometheus 可达的受保护内网 IP。9002 是无认证指标端口，只允许监控来源访问；hostNetwork 下不能只依赖普通 Pod NetworkPolicy。确认节点 9002、127.0.0.1:12346 未被其他进程占用。
 
 日志方案要求该 Linux 节点使用 systemd-journald，主机存在 /run/log、/var/log 和 /etc/machine-id，内核支持 nftables。Alloy 以 root 只读挂载日志，无 NET_ADMIN、privileged 或集群 API 权限；集群准入需允许这些现有网关及日志挂载。若现有节点 Alloy 已采相同日志，不重复采集。
 
 ## 2. 先准备客户端基础配置
 
-按 [客户端教程](../README.md)准备 client/k8s/deployment.yaml 的固定节点、网段、密钥 Secret 和 PVC；该目录的 namespace、部署名称保持不变。监控 overlay 直接引用 ../k8s 基础目录，不包含另一份网关实例。
+按 [客户端教程](../README.md)准备 client/k8s/deployment.yaml 的网段，并在 deployment-patch.yaml 填写固定节点、密钥 Secret 和 PVC；该目录的 namespace、部署名称保持不变。监控 overlay 直接引用 ../k8s 基础目录，不包含另一份网关实例。
 
 新部署和后续更新均使用本 overlay，不再同时 apply 基础目录，否则基础目录 apply 可能移除监控字段。
 

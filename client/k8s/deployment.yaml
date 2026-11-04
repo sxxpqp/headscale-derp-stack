@@ -15,24 +15,30 @@ spec:
       labels:
         app: tailscale-client
     spec:
-      # Linux 节点网关模式，影响选定节点的路由表。
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
+      # 使用 Pod 网络，在 Pod 网络命名空间内转发。
+      dnsPolicy: ClusterFirst
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
-      nodeSelector:
-        kubernetes.io/hostname: REPLACE_WITH_ROUTER_NODE
+      initContainers:
+        - name: enable-ip-forward
+          image: tailscale/tailscale:v1.104
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c, "sysctl -w net.ipv4.ip_forward=1"]
+          securityContext:
+            privileged: true
+            runAsUser: 0
       containers:
         - name: tailscale
-          image: tailscale/tailscale:v1.104.5
+          image: tailscale/tailscale:v1.104
           imagePullPolicy: IfNotPresent
           securityContext:
+            privileged: true
             runAsUser: 0
             capabilities:
               add: [NET_ADMIN]
           env:
             - name: TS_HOSTNAME
-              value: k8s-router
+              value: site-a-router
             - name: TS_AUTHKEY
               valueFrom:
                 secretKeyRef:
@@ -51,9 +57,11 @@ spec:
               value: /var/lib/tailscale
             # 必改：只发布该节点可达的实际网段。
             - name: TS_ROUTES
-              value: 172.16.0.0/24
+              value: "192.168.150.0/24,10.96.0.0/12,172.16.0.0/16"
             - name: TS_EXTRA_ARGS
-              value: --login-server=https://hb.sxxpqp.top --accept-routes --advertise-exit-node
+              value: --login-server=https://hs.wishfoxs.com:5443
+            - name: TS_DEBUG_FIREWALL_MODE
+              value: nftables
           resources:
             requests:
               cpu: 100m

@@ -13,7 +13,7 @@
 | `<方式>/config/headscale.yaml` | `server_url` | 公网控制地址，如 `https://vpn.your-domain.com` |
 | 同上 | `derp.server.ipv4` / `203.0.113.10` | IDC 真实公网 IPv4；不能是内网 IP 或示例 IP |
 | 同上 | `dns.base_domain` | MagicDNS 基域，如 `tail.your-domain.com`，必须不同于控制域名 |
-| `<方式>/config/headplane.yaml` | `server.base_url` | 公网管理基础地址；本模板与控制地址相同，不带 `/admin` |
+| `<方式>/config/headplane.yaml` | `server.base_url` | 公网管理基础地址；使用独立于控制域名的管理地址，不带 `/admin` |
 | 同上 | `server.cookie_secret` | `openssl rand -hex 16` 生成的随机 32 字符密钥 |
 | 同上 | `headscale.public_url` | 与 Headscale `server_url` 一致 |
 | `<方式>/config/policy.hujson` | `acls` | 默认全部放行；需要隔离时按实际用户、节点和端口收紧 |
@@ -24,7 +24,7 @@
 
 | 文件 | 要修改 / 核对的项目 |
 | --- | --- |
-| `docker/nginx/headscale.conf.example` | 所有 `vpn.example.com`、证书和私钥路径；合并到现有 Nginx，勿覆盖其他业务 |
+| `docker/nginx/headscale.conf.example` | `vpn.example.com` 控制域名、`admin.example.com` 管理域名、覆盖两个域名的证书和私钥路径；合并到现有 Nginx，勿覆盖其他业务 |
 | `docker/.env`（从 `.env.example` 复制） | 目标版本，默认 Headscale 0.29.7 / Headplane 0.8.2；通常保持默认 |
 | `docker/compose.yaml` | 宿主机 8080、3000 回环端口及 UDP 3478 是否空闲；端口变化须同步 Nginx 上游 |
 
@@ -33,7 +33,7 @@
 | 文件 / 资源 | 要修改 / 核对的项目 |
 | --- | --- |
 | `k8s/workloads.yaml` | `REPLACE_WITH_IDC_NODE` → 实际节点 hostname；节点需支持 hostPort 并开放 UDP 3478 |
-| `k8s/ingress.yaml` | `REPLACE_WITH_INGRESS_CLASS` → 已有 IngressClass；`tls.hosts` 与 `rules.host` 都替换为控制域名 |
+| `k8s/ingress.yaml` | `REPLACE_WITH_INGRESS_CLASS` → 已有 IngressClass；`tls.hosts` 与 `rules.host` 分别填写控制域名和管理域名 |
 | 同上 / 集群 Secret | 创建同 namespace 的 `headscale-tls`，或同步修改 Secret 名称；配置证书续期 |
 | 现有 Ingress Controller | 按控制器开启自定义 Upgrade、长连接和关闭缓冲，具体要求见 K8s 文档 |
 | `k8s/storage.yaml` | 有可用默认 StorageClass；没有时两个 PVC 都添加 `storageClassName`；按需调整 1Gi 容量 |

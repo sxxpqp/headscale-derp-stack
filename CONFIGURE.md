@@ -38,6 +38,7 @@ bash configure.sh
 ```dotenv
 INSTANCE=prod
 PUBLIC_URL=https://hb.sxxpqp.top:8443
+ADMIN_URL=https://admin.sxxpqp.top:8443
 PUBLIC_IPV4=替换为实际公网IPv4
 NODE=替换为kubectl_get_nodes查到的hostname
 INGRESS_CLASS=替换为已有IngressClass
@@ -58,7 +59,9 @@ TLS_KEY=/管理机实际路径/privkey.pem
 
 脚本只把现有证书转换为本地 Secret YAML，加入生成目录的 kustomization.yaml；不会签发证书或访问集群。Headplane 配置 Secret 仍由 secretGenerator 自动生成。
 
-PUBLIC_URL 可以包含 HTTPS 端口，Ingress host 字段会只保留域名；Controller/NAT 的公网端口、UDP STUN 及证书续期仍由现有流程配置。
+服务端必须填写 ADMIN_URL，域名须不同于 PUBLIC_URL；Headplane server.base_url 使用 ADMIN_URL，headscale.public_url 保持 PUBLIC_URL。证书（Docker 的 TLS_CERT/TLS_KEY 或 K8s 的 TLS_SECRET）必须同时覆盖两个域名；管理界面访问 ADMIN_URL/admin/。旧 setup.env 需补上 ADMIN_URL。
+
+PUBLIC_URL 和 ADMIN_URL 可以包含各自的 HTTPS 端口，Ingress host 字段会只保留域名；Controller/NAT 的公网端口、UDP STUN 及证书续期仍由现有流程配置。
 
 ### 例：服务端 Docker
 
@@ -66,12 +69,13 @@ PUBLIC_URL 可以包含 HTTPS 端口，Ingress host 字段会只保留域名；C
 ```dotenv
 INSTANCE=prod-docker
 PUBLIC_URL=https://hb.sxxpqp.top:8443
+ADMIN_URL=https://admin.sxxpqp.top:8443
 PUBLIC_IPV4=替换为实际公网IPv4
 TLS_CERT=/etc/letsencrypt/live/hb.sxxpqp.top/fullchain.pem
 TLS_KEY=/etc/letsencrypt/live/hb.sxxpqp.top/privkey.pem
 ```
 
-不使用 NODE、INGRESS_CLASS 或 StorageClass。生成 nginx/headscale.conf，需手动合并到已有 Nginx。证书路径属于 Nginx 宿主机，不会自动导入或复制证书。80 跳转和 HTTPS 监听会同步 PUBLIC_URL 的端口；公网端口映射场景可按实际拓扑再调整监听。
+不使用 NODE、INGRESS_CLASS 或 StorageClass。生成 nginx/headscale.conf，需手动合并到已有 Nginx。证书路径属于 Nginx 宿主机，不会自动导入或复制证书。80 跳转和 HTTPS 监听会分别同步 PUBLIC_URL 和 ADMIN_URL 的端口；公网端口映射场景可按实际拓扑再调整监听。
 
 ### 例：客户端 K8s / Docker
 
@@ -81,12 +85,11 @@ TLS_KEY=/etc/letsencrypt/live/hb.sxxpqp.top/privkey.pem
 ```dotenv
 INSTANCE=site-a
 PUBLIC_URL=https://hb.sxxpqp.top:8443
-NODE=替换为网关节点hostname
 STORAGE_CLASS=
 CLIENT_NAME=site-a-router
 AUTH_KEY=替换为Headplane生成的预认证密钥
 ROUTES=172.16.0.0/24
-ACCEPT_ROUTES=y
+ACCEPT_ROUTES=n
 EXIT_NODE=n
 ```
 
@@ -130,7 +133,7 @@ docker compose up -d
 
 INSTANCE 只区分本地生成目录，不会创建新的 namespace、Kubernetes 资源名或 Compose 项目名。不要把不同 INSTANCE 当成互相隔离的并行部署。已有部署应先备份、比对配置和数据卷引用，再安排更新。
 
-客户端启动前仍需在目标 Linux 节点开启转发；发布路由需 Headscale 批准。服务端 Secret、证书和 Ingress 验证见 [K8s 教程](server/k8s/README.md)。现有日志采集和监控配置不在这个生成器中重复部署，继续使用现网组件。
+Docker 客户端启动前需在目标 Linux 节点开启转发；K8s 基础模板通过 initContainer 开启 Pod 内 IPv4 转发；发布路由需 Headscale 批准。服务端 Secret、证书和 Ingress 验证见 [K8s 教程](server/k8s/README.md)。现有日志采集和监控配置不在这个生成器中重复部署，继续使用现网组件。
 
 ## 本地检查
 

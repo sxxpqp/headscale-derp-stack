@@ -52,7 +52,7 @@ server/                 # 服务端：Headscale + Headplane，含内置 DERP/STU
 client/                 # 客户端：Tailscale，独立启动
   README.md
   docker/               # Linux host 网络网关
-  k8s/                  # 单节点 hostNetwork 网关 Pod
+  k8s/                  # Pod 网络子网路由客户端
 ```
 
 从仓库根目录进入相应目录：
