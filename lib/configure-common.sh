@@ -78,7 +78,14 @@ load_settings() {
     printf -v "$key" '%s' "$value"
   done < "$settings_file"
 }
-check() { "$2" "${!1}" || die "变量 $1 缺失或格式不正确"; }
+check() {
+  local value="${!1}"
+  if [[ -z "$value" ]]; then
+    "$2" "$value" || die "变量 $1 未填写"
+    return 0
+  fi
+  "$2" "$value" || die "变量 $1 格式不正确"
+}
 secret_ok() { [[ -n "$1" && "$1" != REPLACE_* && "$1" =~ ^[a-zA-Z0-9._-]+$ ]]; }
 copy_file() {
   local relative="$1" target="${2:-$1}"
@@ -350,5 +357,3 @@ fi
 if [[ "$ROLE" == client ]]; then
   printf 'Docker 启动前开启宿主机转发；K8s 由 initContainer 开启 Pod 转发。注册后在 Headscale 批准路由。\n'
 fi
-
-
